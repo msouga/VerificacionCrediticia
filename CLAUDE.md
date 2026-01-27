@@ -43,6 +43,7 @@ tests/
 ## Skills obligatorios
 Antes de escribir o modificar codigo, SIEMPRE consultar los skills relevantes:
 - **angular-enterprise**: Para cualquier cambio en el frontend Angular
+- **aspnet-enterprise**: Para controllers, DI, middleware, estructura de API .NET
 - **ef-core-patterns**: Para Entity Framework Core, migraciones, repositorios
 - **azure-cloud**: Para App Service, Key Vault, CI/CD, configuracion Azure
 - **azure-architecture**: Para decisiones de arquitectura y servicios Azure
