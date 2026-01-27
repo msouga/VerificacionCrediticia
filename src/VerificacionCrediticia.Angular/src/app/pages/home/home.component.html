@@ -1,0 +1,190 @@
+<div class="home-container">
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="subtitle">{{ today | date:'EEEE d \'de\' MMMM, yyyy' }}</p>
+    </div>
+    <a mat-flat-button color="primary" routerLink="/evaluar">
+      <mat-icon>add</mat-icon>
+      Nueva Evaluacion
+    </a>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="stats-grid">
+    <mat-card class="stat-card primary">
+      <mat-card-content>
+        <div class="stat-header">
+          <mat-icon>assessment</mat-icon>
+          <span class="stat-trend">+12%</span>
+        </div>
+        <div class="stat-value">{{ stats.evaluacionesHoy }}</div>
+        <div class="stat-label">Evaluaciones Hoy</div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card success">
+      <mat-card-content>
+        <div class="stat-header">
+          <mat-icon>check_circle</mat-icon>
+          <span class="stat-trend">{{ stats.porcentajeAprobacion }}%</span>
+        </div>
+        <div class="stat-value">{{ stats.aprobadas }}</div>
+        <div class="stat-label">Aprobadas</div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card warning">
+      <mat-card-content>
+        <div class="stat-header">
+          <mat-icon>pending</mat-icon>
+          <span class="stat-trend">{{ stats.porcentajeRevision }}%</span>
+        </div>
+        <div class="stat-value">{{ stats.enRevision }}</div>
+        <div class="stat-label">En Revision</div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card error">
+      <mat-card-content>
+        <div class="stat-header">
+          <mat-icon>cancel</mat-icon>
+          <span class="stat-trend">{{ stats.porcentajeRechazo }}%</span>
+        </div>
+        <div class="stat-value">{{ stats.rechazadas }}</div>
+        <div class="stat-label">Rechazadas</div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <div class="content-grid">
+    <!-- Tendencia Semanal -->
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>Tendencia Semanal</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @for (dia of tendencia; track dia.dia) {
+          <div class="trend-row">
+            <span class="trend-label">{{ dia.dia }}</span>
+            <mat-progress-bar mode="determinate" [value]="dia.porcentaje"></mat-progress-bar>
+            <span class="trend-value">{{ dia.evaluaciones }}</span>
+          </div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Distribucion -->
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>Distribucion por Resultado</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="distribution-item">
+          <div class="dist-header">
+            <span>Aprobadas</span>
+            <span class="dist-pct success-text">{{ stats.porcentajeAprobacion }}%</span>
+          </div>
+          <mat-progress-bar mode="determinate" [value]="stats.porcentajeAprobacion" class="bar-success"></mat-progress-bar>
+        </div>
+        <div class="distribution-item">
+          <div class="dist-header">
+            <span>En Revision</span>
+            <span class="dist-pct warning-text">{{ stats.porcentajeRevision }}%</span>
+          </div>
+          <mat-progress-bar mode="determinate" [value]="stats.porcentajeRevision" class="bar-warning"></mat-progress-bar>
+        </div>
+        <div class="distribution-item">
+          <div class="dist-header">
+            <span>Rechazadas</span>
+            <span class="dist-pct error-text">{{ stats.porcentajeRechazo }}%</span>
+          </div>
+          <mat-progress-bar mode="determinate" [value]="stats.porcentajeRechazo" class="bar-error"></mat-progress-bar>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric">
+            <div class="metric-value">2.3s</div>
+            <div class="metric-label">Tiempo promedio</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">{{ stats.evaluacionesMes }}</div>
+            <div class="metric-label">Evaluaciones mes</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">{{ stats.scorePromedio }}</div>
+            <div class="metric-label">Score promedio</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">{{ stats.empresasUnicas }}</div>
+            <div class="metric-label">Empresas unicas</div>
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Evaluaciones Recientes -->
+  <mat-card class="section-card">
+    <mat-card-header>
+      <mat-card-title>Evaluaciones Recientes</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <table mat-table [dataSource]="evaluacionesRecientes" class="full-width">
+        <ng-container matColumnDef="nombre">
+          <th mat-header-cell *matHeaderCellDef>Solicitante</th>
+          <td mat-cell *matCellDef="let e">
+            <div>{{ e.nombre }}</div>
+            <div class="caption">DNI: {{ e.dni }}</div>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="empresa">
+          <th mat-header-cell *matHeaderCellDef>Empresa</th>
+          <td mat-cell *matCellDef="let e">
+            <div>{{ e.empresa }}</div>
+            <div class="caption">RUC: {{ e.ruc }}</div>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="score">
+          <th mat-header-cell *matHeaderCellDef>Score</th>
+          <td mat-cell *matCellDef="let e">
+            <span class="score-chip" [class]="getScoreColor(e.score)">
+              {{ e.score | number:'1.1-1' }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="resultado">
+          <th mat-header-cell *matHeaderCellDef>Resultado</th>
+          <td mat-cell *matCellDef="let e">
+            <span class="result-chip" [class]="getResultColor(e.resultado)">
+              {{ e.resultado }}
+            </span>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Alertas Recientes -->
+  <mat-card class="section-card">
+    <mat-card-header>
+      <mat-card-title>Alertas Recientes</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      @for (alerta of alertasRecientes; track alerta.mensaje) {
+        <div class="alert-item" [class]="'alert-' + alerta.severidad">
+          <mat-icon>{{ alerta.severidad === 'error' ? 'error' : 'warning' }}</mat-icon>
+          <span class="alert-msg">{{ alerta.mensaje }}</span>
+          <span class="alert-time">{{ alerta.tiempo }}</span>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+</div>

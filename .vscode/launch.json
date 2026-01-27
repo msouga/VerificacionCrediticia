@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Angular Client (Debug)",
+            "type": "chrome",
+            "request": "launch",
+            "preLaunchTask": "start-angular",
+            "url": "http://localhost:4200",
+            "webRoot": "${workspaceFolder}/src/VerificacionCrediticia.Angular/src",
+            "sourceMapPathOverrides": {
+                "webpack:/*": "${webRoot}/*"
+            }
+        },
+        {
+            "name": "API Server (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-api",
+            "program": "${workspaceFolder}/src/VerificacionCrediticia.API/bin/Debug/net8.0/VerificacionCrediticia.API.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/VerificacionCrediticia.API",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:5100"
+            }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Full Stack (API + Angular)",
+            "configurations": ["API Server (Debug)", "Angular Client (Debug)"],
+            "stopAll": true
+        }
+    ]
+}

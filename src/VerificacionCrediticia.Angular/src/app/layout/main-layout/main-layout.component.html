@@ -1,0 +1,32 @@
+<mat-sidenav-container class="sidenav-container">
+  <mat-sidenav #sidenav mode="side" [opened]="sidenavOpened" class="sidenav">
+    <div class="sidenav-header">
+      <mat-icon class="logo-icon">verified_user</mat-icon>
+      <span class="logo-text">Verificacion Crediticia</span>
+    </div>
+    <mat-nav-list>
+      @for (item of navItems; track item.route) {
+        <a mat-list-item
+           [routerLink]="item.route"
+           routerLinkActive="active-link"
+           [routerLinkActiveOptions]="{ exact: item.route === '/' }">
+          <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+          <span matListItemTitle>{{ item.label }}</span>
+        </a>
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="content-area">
+    <mat-toolbar color="primary" class="toolbar">
+      <button mat-icon-button (click)="sidenavOpened = !sidenavOpened">
+        <mat-icon>menu</mat-icon>
+      </button>
+      <span class="toolbar-spacer"></span>
+      <span class="user-info">RSM Peru</span>
+    </mat-toolbar>
+    <div class="page-content">
+      <router-outlet />
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>

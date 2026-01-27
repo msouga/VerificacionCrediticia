@@ -1,0 +1,286 @@
+<div class="evaluar-container">
+  <h1>Evaluar Verificacion Crediticia</h1>
+
+  <!-- Formulario -->
+  <mat-card class="form-card">
+    <mat-card-header>
+      <mat-card-title>Datos de Consulta</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="form" (ngSubmit)="evaluar()" class="form-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>DNI Solicitante</mat-label>
+          <input matInput formControlName="dniSolicitante" maxlength="8" placeholder="Ingrese el DNI (8 digitos)">
+          @if (form.get('dniSolicitante')?.hasError('pattern')) {
+            <mat-error>El DNI debe tener 8 digitos</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>RUC Empresa</mat-label>
+          <input matInput formControlName="rucEmpresa" maxlength="11" placeholder="Ingrese el RUC (11 digitos)">
+          @if (form.get('rucEmpresa')?.hasError('pattern')) {
+            <mat-error>El RUC debe tener 11 digitos</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Profundidad de Analisis</mat-label>
+          <mat-select formControlName="profundidadMaxima">
+            @for (p of profundidades; track p.value) {
+              <mat-option [value]="p.value">{{ p.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <div class="checkbox-row">
+          <mat-checkbox formControlName="incluirDetalleGrafo">
+            Incluir detalle del grafo de relaciones
+          </mat-checkbox>
+        </div>
+
+        <div class="submit-row">
+          <button mat-flat-button color="primary" type="submit"
+                  [disabled]="form.invalid || loading">
+            @if (loading) {
+              <mat-spinner diameter="20"></mat-spinner>
+              <span>Evaluando...</span>
+            } @else {
+              <ng-container>
+                <mat-icon>search</mat-icon>
+                <span>Evaluar</span>
+              </ng-container>
+            }
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Error -->
+  @if (error) {
+    <mat-card class="error-card">
+      <mat-card-content>
+        <mat-icon>error</mat-icon>
+        {{ error }}
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!-- Resultados -->
+  @if (resultado) {
+    <div class="resultado-section">
+      <!-- Header con score -->
+      <div class="resultado-header" [class]="getHeaderClass()">
+        <div class="header-left">
+          <h2>Resultado de la Evaluacion</h2>
+          <span class="recomendacion-label">{{ getRecomendacionText() }}</span>
+        </div>
+        <div class="header-score">
+          <span class="score-big">{{ resultado.scoreFinal | number:'1.1-1' }}</span>
+          <span class="score-label">/ 100</span>
+        </div>
+      </div>
+
+      <!-- Desglose -->
+      <mat-accordion multi>
+        <!-- Solicitante -->
+        <mat-expansion-panel expanded>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon class="panel-icon info">person</mat-icon>
+              Solicitante - {{ resultado.nombreSolicitante }}
+            </mat-panel-title>
+            <mat-panel-description>
+              <span class="status-chip" [class]="getScoreColor(desglose!.scoreSolicitante)">
+                {{ getStatusLabel(desglose!.scoreSolicitante) }}
+              </span>
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="panel-body">
+            <div class="score-bar-row">
+              <span>Score: {{ desglose!.scoreSolicitante | number:'1.1-1' }}</span>
+              <mat-progress-bar mode="determinate" [value]="desglose!.scoreSolicitante"
+                               [class]="'bar-' + getScoreColor(desglose!.scoreSolicitante)">
+              </mat-progress-bar>
+            </div>
+            <p class="detail-label">DNI: {{ resultado.dniSolicitante }}</p>
+            @if (motivosSolicitanteLimit.length > 0) {
+              <ul class="motivos-list">
+                @for (motivo of motivosSolicitanteLimit; track motivo) {
+                  <li>{{ motivo }}</li>
+                }
+              </ul>
+            } @else {
+              <div class="no-issues">
+                <mat-icon>check_circle</mat-icon>
+                Sin problemas detectados
+              </div>
+            }
+          </div>
+        </mat-expansion-panel>
+
+        <!-- Empresa -->
+        <mat-expansion-panel expanded>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon class="panel-icon secondary">business</mat-icon>
+              Empresa - {{ resultado.razonSocialEmpresa }}
+            </mat-panel-title>
+            <mat-panel-description>
+              <span class="status-chip" [class]="getScoreColor(desglose!.scoreEmpresa)">
+                {{ getStatusLabel(desglose!.scoreEmpresa) }}
+              </span>
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="panel-body">
+            <div class="score-bar-row">
+              <span>Score: {{ desglose!.scoreEmpresa | number:'1.1-1' }}</span>
+              <mat-progress-bar mode="determinate" [value]="desglose!.scoreEmpresa"
+                               [class]="'bar-' + getScoreColor(desglose!.scoreEmpresa)">
+              </mat-progress-bar>
+            </div>
+            <p class="detail-label">RUC: {{ resultado.rucEmpresa }}</p>
+            @if (motivosEmpresaLimit.length > 0) {
+              <ul class="motivos-list">
+                @for (motivo of motivosEmpresaLimit; track motivo) {
+                  <li>{{ motivo }}</li>
+                }
+              </ul>
+            } @else {
+              <div class="no-issues">
+                <mat-icon>check_circle</mat-icon>
+                Sin problemas detectados
+              </div>
+            }
+          </div>
+        </mat-expansion-panel>
+
+        <!-- Red de Relaciones -->
+        <mat-expansion-panel expanded>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon class="panel-icon primary">hub</mat-icon>
+              Red de Relaciones
+            </mat-panel-title>
+            <mat-panel-description>
+              {{ desglose!.totalRelacionesAnalizadas }} vinculos analizados
+              <span class="status-chip" [class]="getScoreColor(desglose!.scoreRelaciones)">
+                {{ getStatusLabel(desglose!.scoreRelaciones) }}
+              </span>
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="panel-body">
+            <div class="score-bar-row">
+              <span>Score: {{ desglose!.scoreRelaciones | number:'1.1-1' }}</span>
+              <mat-progress-bar mode="determinate" [value]="desglose!.scoreRelaciones"
+                               [class]="'bar-' + getScoreColor(desglose!.scoreRelaciones)">
+              </mat-progress-bar>
+            </div>
+            @if (desglose!.relacionesConProblemas > 0) {
+              <p class="detail-label warning-text">
+                {{ desglose!.relacionesConProblemas }} de {{ desglose!.totalRelacionesAnalizadas }} con alertas
+              </p>
+            }
+            @if (motivosRelacionesLimit.length > 0) {
+              <ul class="motivos-list">
+                @for (motivo of motivosRelacionesLimit; track motivo) {
+                  <li>{{ motivo }}</li>
+                }
+              </ul>
+              @if (motivosRelacionesExtra > 0) {
+                <p class="extra-motivos">+ {{ motivosRelacionesExtra }} problemas adicionales</p>
+              }
+            } @else {
+              <div class="no-issues">
+                <mat-icon>check_circle</mat-icon>
+                Red sin problemas
+              </div>
+            }
+          </div>
+        </mat-expansion-panel>
+      </mat-accordion>
+
+      <!-- Info cards -->
+      <div class="info-grid">
+        <mat-card>
+          <mat-card-header><mat-card-title>Informacion del Solicitante</mat-card-title></mat-card-header>
+          <mat-card-content>
+            <p><strong>DNI:</strong> {{ resultado.dniSolicitante }}</p>
+            <p><strong>Nombre:</strong> {{ resultado.nombreSolicitante }}</p>
+          </mat-card-content>
+        </mat-card>
+        <mat-card>
+          <mat-card-header><mat-card-title>Informacion de la Empresa</mat-card-title></mat-card-header>
+          <mat-card-content>
+            <p><strong>RUC:</strong> {{ resultado.rucEmpresa }}</p>
+            <p><strong>Razon Social:</strong> {{ resultado.razonSocialEmpresa }}</p>
+          </mat-card-content>
+        </mat-card>
+      </div>
+
+      <!-- Resumen de Red -->
+      @if (resumen) {
+        <h3>Resumen de la Red</h3>
+        <div class="summary-grid">
+          <mat-card class="summary-card normal">
+            <mat-card-content>
+              <div class="summary-value primary-text">{{ resumen.totalPersonasAnalizadas }}</div>
+              <div class="summary-label">Personas</div>
+            </mat-card-content>
+          </mat-card>
+          <mat-card class="summary-card normal">
+            <mat-card-content>
+              <div class="summary-value primary-text">{{ resumen.totalEmpresasAnalizadas }}</div>
+              <div class="summary-label">Empresas</div>
+            </mat-card-content>
+          </mat-card>
+          <mat-card class="summary-card warn">
+            <mat-card-content>
+              <div class="summary-value warning-text">{{ resumen.personasConProblemas }}</div>
+              <div class="summary-label">Personas con Problemas</div>
+            </mat-card-content>
+          </mat-card>
+          <mat-card class="summary-card warn">
+            <mat-card-content>
+              <div class="summary-value warning-text">{{ resumen.empresasConProblemas }}</div>
+              <div class="summary-label">Empresas con Problemas</div>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
+        @if (resumen.montoTotalDeudasVencidas > 0) {
+          <div class="debt-alert">
+            <mat-icon>warning</mat-icon>
+            Deuda vencida total en la red: S/ {{ resumen.montoTotalDeudasVencidas | number:'1.2-2' }}
+          </div>
+        }
+      }
+
+      <!-- Alertas -->
+      @if (resultado.alertas && resultado.alertas.length > 0) {
+        <h3>Alertas Detectadas</h3>
+        <div class="alertas-list">
+          @for (alerta of resultado.alertas; track $index) {
+            <div class="alerta-item">
+              <span class="severity-chip" [class]="getSeveridadColor(alerta.severidad)">
+                {{ alerta.severidad }}
+              </span>
+              <span class="level-badge">Nivel {{ alerta.nivelProfundidad }}</span>
+              <span>{{ alerta.mensaje }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Grafo de Relaciones -->
+      @if (resultado.grafo) {
+        <app-grafo-red
+          [grafo]="resultado.grafo"
+          [dniSolicitante]="resultado.dniSolicitante"
+          [rucEmpresa]="resultado.rucEmpresa">
+        </app-grafo-red>
+      }
+    </div>
+  }
+</div>

@@ -1,0 +1,100 @@
+<mat-card class="grafo-card">
+  <mat-card-header>
+    <mat-icon mat-card-avatar>hub</mat-icon>
+    <mat-card-title>Grafo de Relaciones</mat-card-title>
+    <mat-card-subtitle>Haz clic en un nodo para ver detalles</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div class="grafo-wrapper">
+      <div #cyContainer class="cy-container"></div>
+
+      @if (nodoSeleccionado) {
+        <div class="nodo-detalle">
+          <div class="detalle-header">
+            <mat-icon>{{ getTipoLabel(nodoSeleccionado.tipo) === 'Persona' ? 'person' : 'business' }}</mat-icon>
+            <div>
+              <h3>{{ nodoSeleccionado.nombre }}</h3>
+              <span class="identificador">{{ nodoSeleccionado.identificador }}</span>
+            </div>
+            <button class="cerrar-btn" (click)="cerrarDetalle()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+
+          <div class="detalle-body">
+            <div class="detalle-row">
+              <span class="label">Tipo:</span>
+              <span>{{ getTipoLabel(nodoSeleccionado.tipo) }}</span>
+            </div>
+            <div class="detalle-row">
+              <span class="label">Score:</span>
+              <span [class]="'score-value ' + (nodoSeleccionado.score && nodoSeleccionado.score >= 600 ? 'score-ok' : 'score-bad')">
+                {{ nodoSeleccionado.score ?? 'N/A' }}
+              </span>
+            </div>
+            <div class="detalle-row">
+              <span class="label">Estado:</span>
+              <mat-chip [color]="getEstadoColor(nodoSeleccionado.estadoCredito)" highlighted>
+                {{ getEstadoLabel(nodoSeleccionado.estadoCredito) }}
+              </mat-chip>
+            </div>
+            <div class="detalle-row">
+              <span class="label">Nivel:</span>
+              <span>{{ nodoSeleccionado.nivelProfundidad }}</span>
+            </div>
+
+            @if (nodoSeleccionado.alertas.length > 0) {
+              <div class="detalle-section">
+                <span class="label">Alertas:</span>
+                <ul>
+                  @for (alerta of nodoSeleccionado.alertas; track alerta) {
+                    <li class="alerta-item">{{ alerta }}</li>
+                  }
+                </ul>
+              </div>
+            }
+
+            @if (nodoSeleccionado.deudas.length > 0) {
+              <div class="detalle-section">
+                <span class="label">Deudas:</span>
+                <ul>
+                  @for (deuda of nodoSeleccionado.deudas; track deuda.entidad) {
+                    <li class="deuda-item">
+                      <strong>{{ deuda.entidad }}</strong> - {{ deuda.tipoDeuda }}<br>
+                      Saldo: S/ {{ deuda.saldoActual | number:'1.0-0' }}
+                      @if (deuda.diasVencidos > 0) {
+                        <span class="vencido">({{ deuda.diasVencidos }} dias vencidos)</span>
+                      }
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+
+            @if (nodoSeleccionado.conexiones.length > 0) {
+              <div class="detalle-section">
+                <span class="label">Conexiones:</span>
+                <ul>
+                  @for (conn of nodoSeleccionado.conexiones; track conn.identificador) {
+                    <li>{{ conn.nombre }} ({{ conn.tipoRelacion }})</li>
+                  }
+                </ul>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="leyenda">
+      <span class="leyenda-item"><span class="dot" style="background: #4caf50"></span> Normal</span>
+      <span class="leyenda-item"><span class="dot" style="background: #ff9800"></span> Problemas Potenciales</span>
+      <span class="leyenda-item"><span class="dot" style="background: #f44336"></span> Moroso</span>
+      <span class="leyenda-item"><span class="dot" style="background: #b71c1c"></span> Castigado</span>
+      <span class="leyenda-item"><span class="dot" style="background: #9e9e9e"></span> Sin Info</span>
+      <span class="leyenda-item"><span class="shape-circle" style="border-color: #1565c0"></span> Solicitante</span>
+      <span class="leyenda-item"><span class="shape-rect" style="border-color: #4527a0"></span> Empresa Principal</span>
+    </div>
+  </mat-card-content>
+</mat-card>

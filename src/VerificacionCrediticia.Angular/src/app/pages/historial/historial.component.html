@@ -1,0 +1,257 @@
+<div class="historial-container">
+  <h1>Historial de Evaluaciones</h1>
+
+  <!-- Filtros -->
+  <mat-card class="filters-card">
+    <mat-card-content>
+      <div class="filters-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Busqueda</mat-label>
+          <input matInput [formControl]="searchControl" placeholder="DNI, RUC o nombre...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Resultado</mat-label>
+          <mat-select [formControl]="resultadoFilter">
+            <mat-option value="">Todos</mat-option>
+            <mat-option value="APROBADO">Aprobado</mat-option>
+            <mat-option value="REVISION">Revision</mat-option>
+            <mat-option value="RECHAZADO">Rechazado</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Desde</mat-label>
+          <input matInput [matDatepicker]="pickerDesde" [formControl]="fechaDesde">
+          <mat-datepicker-toggle matSuffix [for]="pickerDesde"></mat-datepicker-toggle>
+          <mat-datepicker #pickerDesde></mat-datepicker>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Hasta</mat-label>
+          <input matInput [matDatepicker]="pickerHasta" [formControl]="fechaHasta">
+          <mat-datepicker-toggle matSuffix [for]="pickerHasta"></mat-datepicker-toggle>
+          <mat-datepicker #pickerHasta></mat-datepicker>
+        </mat-form-field>
+      </div>
+      <div class="filter-actions">
+        <button mat-flat-button color="primary" (click)="applyFilters()">
+          <mat-icon>filter_list</mat-icon> Filtrar
+        </button>
+        <button mat-stroked-button (click)="clearFilters()">
+          <mat-icon>clear</mat-icon> Limpiar
+        </button>
+        <button mat-stroked-button color="accent">
+          <mat-icon>download</mat-icon> Exportar
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Summary Cards -->
+  <div class="summary-grid">
+    <mat-card class="summary-card primary">
+      <mat-card-content>
+        <div class="summary-value">{{ totalFiltered }}</div>
+        <div class="summary-label">Total Resultados</div>
+      </mat-card-content>
+    </mat-card>
+    <mat-card class="summary-card success">
+      <mat-card-content>
+        <div class="summary-value">{{ aprobadas }}</div>
+        <div class="summary-label">Aprobadas</div>
+      </mat-card-content>
+    </mat-card>
+    <mat-card class="summary-card warning">
+      <mat-card-content>
+        <div class="summary-value">{{ enRevision }}</div>
+        <div class="summary-label">En Revision</div>
+      </mat-card-content>
+    </mat-card>
+    <mat-card class="summary-card error">
+      <mat-card-content>
+        <div class="summary-value">{{ rechazadas }}</div>
+        <div class="summary-label">Rechazadas</div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Tabla -->
+  <mat-card>
+    <mat-card-content>
+      <div class="table-container">
+        <table mat-table [dataSource]="dataSource" matSort class="full-width">
+          <ng-container matColumnDef="fecha">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Fecha</th>
+            <td mat-cell *matCellDef="let e">
+              <div>{{ e.fecha | date:'dd/MM/yyyy' }}</div>
+              <div class="caption">{{ e.fecha | date:'HH:mm' }}</div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef>ID</th>
+            <td mat-cell *matCellDef="let e">
+              <span class="mono caption">{{ e.id }}</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="solicitante">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Solicitante</th>
+            <td mat-cell *matCellDef="let e">
+              <div>{{ e.nombreSolicitante }}</div>
+              <div class="caption">{{ e.dniSolicitante }}</div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="empresa">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Empresa</th>
+            <td mat-cell *matCellDef="let e">
+              <div class="empresa-cell">{{ e.razonSocialEmpresa }}</div>
+              <div class="caption">{{ e.rucEmpresa }}</div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="score">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Score</th>
+            <td mat-cell *matCellDef="let e">
+              <span class="score-chip" [class]="getScoreColor(e.scoreFinal)">
+                {{ e.scoreFinal | number:'1.1-1' }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="desglose">
+            <th mat-header-cell *matHeaderCellDef>Desglose</th>
+            <td mat-cell *matCellDef="let e">
+              <div class="desglose-row">
+                <mat-icon class="desglose-icon">person</mat-icon>
+                <mat-progress-bar mode="determinate" [value]="e.scoreSolicitante"
+                  [class]="'mini-bar bar-' + getScoreColor(e.scoreSolicitante)"></mat-progress-bar>
+                <span class="desglose-val">{{ e.scoreSolicitante | number:'1.0-0' }}</span>
+              </div>
+              <div class="desglose-row">
+                <mat-icon class="desglose-icon">business</mat-icon>
+                <mat-progress-bar mode="determinate" [value]="e.scoreEmpresa"
+                  [class]="'mini-bar bar-' + getScoreColor(e.scoreEmpresa)"></mat-progress-bar>
+                <span class="desglose-val">{{ e.scoreEmpresa | number:'1.0-0' }}</span>
+              </div>
+              <div class="desglose-row">
+                <mat-icon class="desglose-icon">hub</mat-icon>
+                <mat-progress-bar mode="determinate" [value]="e.scoreRed"
+                  [class]="'mini-bar bar-' + getScoreColor(e.scoreRed)"></mat-progress-bar>
+                <span class="desglose-val">{{ e.scoreRed | number:'1.0-0' }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="resultado">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Resultado</th>
+            <td mat-cell *matCellDef="let e">
+              <span class="result-chip" [class]="getResultColor(e.resultado)">
+                {{ e.resultado }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="alertas">
+            <th mat-header-cell *matHeaderCellDef>Alertas</th>
+            <td mat-cell *matCellDef="let e">
+              @if (e.alertas > 0) {
+                <span class="alert-badge" [class.critical]="e.alertaCritica">
+                  {{ e.alertas }}
+                </span>
+              } @else {
+                <mat-icon class="check-icon">check_circle</mat-icon>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="acciones">
+            <th mat-header-cell *matHeaderCellDef>Acciones</th>
+            <td mat-cell *matCellDef="let e">
+              <button mat-icon-button (click)="viewDetail(e)" matTooltip="Ver detalle">
+                <mat-icon>visibility</mat-icon>
+              </button>
+              <button mat-icon-button color="warn" matTooltip="Descargar PDF">
+                <mat-icon>picture_as_pdf</mat-icon>
+              </button>
+              <button mat-icon-button matTooltip="Re-evaluar">
+                <mat-icon>refresh</mat-icon>
+              </button>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+      </div>
+      <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" [pageSize]="10" showFirstLastButtons></mat-paginator>
+    </mat-card-content>
+  </mat-card>
+</div>
+
+<!-- Detail overlay -->
+@if (selectedEval) {
+  <div class="detail-overlay" (click)="closeDetail()">
+    <mat-card class="detail-dialog" (click)="$event.stopPropagation()">
+      <mat-card-header>
+        <mat-card-title>Detalle de Evaluacion</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="detail-header">
+          <span class="result-chip large" [class]="getResultColor(selectedEval.resultado)">
+            {{ selectedEval.resultado }}
+          </span>
+          <span class="detail-score" [class]="getScoreColor(selectedEval.scoreFinal)">
+            {{ selectedEval.scoreFinal | number:'1.1-1' }}
+          </span>
+        </div>
+
+        <div class="detail-grid">
+          <div>
+            <h4>Solicitante</h4>
+            <p>{{ selectedEval.nombreSolicitante }}</p>
+            <p class="caption">DNI: {{ selectedEval.dniSolicitante }}</p>
+          </div>
+          <div>
+            <h4>Empresa</h4>
+            <p>{{ selectedEval.razonSocialEmpresa }}</p>
+            <p class="caption">RUC: {{ selectedEval.rucEmpresa }}</p>
+          </div>
+        </div>
+
+        <div class="detail-scores">
+          <div class="detail-score-item">
+            <span class="label">Solicitante</span>
+            <span class="value" [class]="getScoreColor(selectedEval.scoreSolicitante)">
+              {{ selectedEval.scoreSolicitante | number:'1.1-1' }}
+            </span>
+          </div>
+          <div class="detail-score-item">
+            <span class="label">Empresa</span>
+            <span class="value" [class]="getScoreColor(selectedEval.scoreEmpresa)">
+              {{ selectedEval.scoreEmpresa | number:'1.1-1' }}
+            </span>
+          </div>
+          <div class="detail-score-item">
+            <span class="label">Red</span>
+            <span class="value" [class]="getScoreColor(selectedEval.scoreRed)">
+              {{ selectedEval.scoreRed | number:'1.1-1' }}
+            </span>
+          </div>
+        </div>
+
+        <p class="caption">Evaluado: {{ selectedEval.fecha | date:'dd/MM/yyyy HH:mm' }}</p>
+        <p class="caption">ID: {{ selectedEval.id }}</p>
+      </mat-card-content>
+      <mat-card-actions align="end">
+        <button mat-button (click)="closeDetail()">Cerrar</button>
+        <button mat-flat-button color="warn">
+          <mat-icon>picture_as_pdf</mat-icon> Descargar PDF
+        </button>
+      </mat-card-actions>
+    </mat-card>
+  </div>
+}
