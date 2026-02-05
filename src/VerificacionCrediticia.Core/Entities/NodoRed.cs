@@ -9,6 +9,7 @@ public class NodoRed
     public string Nombre { get; set; } = string.Empty;
     public int NivelProfundidad { get; set; }
     public decimal? Score { get; set; }
+    public string? NivelRiesgoTexto { get; set; }
     public EstadoCrediticio EstadoCredito { get; set; }
     public List<string> Alertas { get; set; } = new();
     public List<DeudaRegistrada> Deudas { get; set; } = new();

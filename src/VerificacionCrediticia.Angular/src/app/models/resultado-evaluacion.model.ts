@@ -40,6 +40,7 @@ export interface NodoRed {
   nombre: string;
   nivelProfundidad: number;
   score?: number;
+  nivelRiesgoTexto?: string;
   estadoCredito: EstadoCrediticio;
   alertas: string[];
   deudas: DeudaRegistrada[];

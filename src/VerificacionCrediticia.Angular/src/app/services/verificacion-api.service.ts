@@ -4,8 +4,6 @@ import { Observable } from 'rxjs';
 import { environment } from '../environments/environment';
 import { SolicitudVerificacion } from '../models/solicitud-verificacion.model';
 import { ResultadoEvaluacion } from '../models/resultado-evaluacion.model';
-import { Persona } from '../models/persona.model';
-import { Empresa } from '../models/empresa.model';
 
 @Injectable({ providedIn: 'root' })
 export class VerificacionApiService {
@@ -20,14 +18,14 @@ export class VerificacionApiService {
     );
   }
 
-  consultarPersona(dni: string): Observable<Persona> {
-    return this.http.get<Persona>(
+  consultarPersona(dni: string): Observable<any> {
+    return this.http.get(
       `${this.baseUrl}/api/verificacion/persona/${dni}`
     );
   }
 
-  consultarEmpresa(ruc: string): Observable<Empresa> {
-    return this.http.get<Empresa>(
+  consultarEmpresa(ruc: string): Observable<any> {
+    return this.http.get(
       `${this.baseUrl}/api/verificacion/empresa/${ruc}`
     );
   }

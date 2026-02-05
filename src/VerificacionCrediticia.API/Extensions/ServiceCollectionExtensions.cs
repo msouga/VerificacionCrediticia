@@ -1,5 +1,6 @@
 using VerificacionCrediticia.Core.Interfaces;
 using VerificacionCrediticia.Core.Services;
+using VerificacionCrediticia.Infrastructure.DocumentIntelligence;
 using VerificacionCrediticia.Infrastructure.Equifax;
 
 namespace VerificacionCrediticia.API.Extensions;
@@ -13,6 +14,11 @@ public static class ServiceCollectionExtensions
         // Configuración de Equifax
         var equifaxSettings = configuration.GetSection(EquifaxSettings.SectionName);
         services.Configure<EquifaxSettings>(equifaxSettings);
+
+        // Configuración de Document Intelligence
+        services.Configure<DocumentIntelligenceSettings>(
+            configuration.GetSection(DocumentIntelligenceSettings.SectionName));
+        services.AddScoped<IDocumentIntelligenceService, DocumentIntelligenceService>();
 
         // Cache en memoria
         services.AddMemoryCache();

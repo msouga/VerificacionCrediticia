@@ -35,3 +35,10 @@ export enum TipoNodo {
   Persona = 'Persona',
   Empresa = 'Empresa'
 }
+
+export enum NivelRiesgo {
+  Bajo = 'Bajo',
+  Moderado = 'Moderado',
+  Alto = 'Alto',
+  MuyAlto = 'MuyAlto'
+}

@@ -22,37 +22,39 @@ public class ExploradorRedService : IExploradorRedService
     {
         var nodosVisitados = new HashSet<string>();
         var grafo = new Dictionary<string, NodoRed>();
-        var cola = new Queue<(string id, TipoNodo tipo, int nivel)>();
+        var cola = new Queue<(string id, string tipoDoc, TipoNodo tipoNodo, int nivel)>();
 
-        // Iniciar exploración con DNI solicitante y RUC empresa
-        cola.Enqueue((dniSolicitante, TipoNodo.Persona, 0));
-        cola.Enqueue((rucEmpresaSolicitante, TipoNodo.Empresa, 0));
+        cola.Enqueue((dniSolicitante, "1", TipoNodo.Persona, 0));
+        cola.Enqueue((rucEmpresaSolicitante, "6", TipoNodo.Empresa, 0));
 
         while (cola.Count > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var (id, tipo, nivel) = cola.Dequeue();
+            var (id, tipoDoc, tipoNodo, nivel) = cola.Dequeue();
 
             if (nodosVisitados.Contains(id) || nivel > profundidadMaxima)
                 continue;
 
             nodosVisitados.Add(id);
 
-            var nodo = await ObtenerInformacionNodoAsync(id, tipo, nivel, cancellationToken);
-            if (nodo != null)
-            {
-                grafo[id] = nodo;
+            var reporte = await _equifaxClient.ConsultarReporteCrediticioAsync(
+                tipoDoc, id, cancellationToken);
 
-                // Agregar conexiones a la cola para explorar siguiente nivel
-                if (nivel < profundidadMaxima)
+            if (reporte == null) continue;
+
+            var nodo = ConstruirNodo(reporte, tipoNodo, nivel);
+            grafo[id] = nodo;
+
+            if (nivel < profundidadMaxima)
+            {
+                foreach (var conexion in nodo.Conexiones)
                 {
-                    foreach (var conexion in nodo.Conexiones)
+                    if (!nodosVisitados.Contains(conexion.Identificador))
                     {
-                        if (!nodosVisitados.Contains(conexion.Identificador))
-                        {
-                            cola.Enqueue((conexion.Identificador, conexion.Tipo, nivel + 1));
-                        }
+                        var tipoDocConexion = conexion.Tipo == TipoNodo.Persona ? "1" : "6";
+                        cola.Enqueue((conexion.Identificador, tipoDocConexion,
+                            conexion.Tipo, nivel + 1));
                     }
                 }
             }
@@ -70,129 +72,107 @@ public class ExploradorRedService : IExploradorRedService
         };
     }
 
-    private async Task<NodoRed?> ObtenerInformacionNodoAsync(
-        string id,
-        TipoNodo tipo,
-        int nivel,
-        CancellationToken cancellationToken)
+    private NodoRed ConstruirNodo(ReporteCrediticioDto reporte, TipoNodo tipoNodo, int nivel)
     {
-        if (tipo == TipoNodo.Persona)
+        var conexiones = new List<ConexionNodo>();
+        var alertas = new List<string>();
+
+        var nivelRiesgo = reporte.NivelRiesgo;
+        var scoreNumerico = NivelRiesgoMapper.ToScoreNumerico(nivelRiesgo);
+        var estadoCredito = NivelRiesgoMapper.ToEstadoCrediticio(nivelRiesgo);
+        var nivelRiesgoTexto = reporte.NivelRiesgoTexto;
+
+        string nombre;
+
+        if (tipoNodo == TipoNodo.Persona)
         {
-            return await ObtenerNodoPersonaAsync(id, nivel, cancellationToken);
+            nombre = reporte.DatosPersona?.Nombres ?? reporte.NumeroDocumento;
+
+            // RepresentantesDe: empresas donde esta persona es representante legal
+            foreach (var rep in reporte.RepresentantesDe)
+            {
+                conexiones.Add(new ConexionNodo
+                {
+                    Identificador = rep.NumeroDocumento,
+                    Tipo = TipoNodo.Empresa,
+                    Nombre = rep.Nombre,
+                    TipoRelacion = rep.Cargo ?? "Representante Legal"
+                });
+            }
+
+            // Alertas de persona
+            if (estadoCredito == EstadoCrediticio.Moroso)
+                alertas.Add("Persona con riesgo alto");
+
+            if (estadoCredito == EstadoCrediticio.Castigado)
+                alertas.Add("Persona con riesgo muy alto");
+
+            var deudasVencidas = reporte.Deudas.Where(d => d.EstaVencida).ToList();
+            if (deudasVencidas.Any())
+            {
+                var montoVencido = deudasVencidas.Sum(d => d.SaldoActual);
+                alertas.Add($"Deudas vencidas por S/ {montoVencido:N2}");
+            }
         }
         else
         {
-            return await ObtenerNodoEmpresaAsync(id, nivel, cancellationToken);
+            nombre = reporte.DatosEmpresa?.RazonSocial ?? reporte.NumeroDocumento;
+
+            // RepresentadoPor: personas que representan esta empresa
+            foreach (var rep in reporte.RepresentadoPor)
+            {
+                conexiones.Add(new ConexionNodo
+                {
+                    Identificador = rep.NumeroDocumento,
+                    Tipo = TipoNodo.Persona,
+                    Nombre = rep.Nombre,
+                    TipoRelacion = rep.Cargo ?? "Representante Legal"
+                });
+            }
+
+            // EmpresasRelacionadas: otras empresas vinculadas
+            foreach (var empRel in reporte.EmpresasRelacionadas)
+            {
+                conexiones.Add(new ConexionNodo
+                {
+                    Identificador = empRel.NumeroDocumento,
+                    Tipo = TipoNodo.Empresa,
+                    Nombre = empRel.Nombre,
+                    TipoRelacion = empRel.Relacion ?? "Empresa Relacionada"
+                });
+            }
+
+            // Alertas de empresa
+            var estadoContrib = reporte.DatosEmpresa?.EstadoContribuyente;
+            if (estadoContrib != null && estadoContrib.ToUpper() != "ACTIVO")
+                alertas.Add($"Empresa con estado: {estadoContrib}");
+
+            if (estadoCredito == EstadoCrediticio.Moroso)
+                alertas.Add("Empresa con riesgo alto");
+
+            if (estadoCredito == EstadoCrediticio.Castigado)
+                alertas.Add("Empresa con riesgo muy alto");
+
+            var deudasVencidas = reporte.Deudas.Where(d => d.EstaVencida).ToList();
+            if (deudasVencidas.Any())
+            {
+                var montoVencido = deudasVencidas.Sum(d => d.SaldoActual);
+                alertas.Add($"Deudas vencidas por S/ {montoVencido:N2}");
+            }
         }
-    }
-
-    private async Task<NodoRed?> ObtenerNodoPersonaAsync(
-        string dni,
-        int nivel,
-        CancellationToken cancellationToken)
-    {
-        var persona = await _equifaxClient.ConsultarPersonaAsync(dni, cancellationToken);
-        if (persona == null) return null;
-
-        var empresas = await _equifaxClient.ObtenerEmpresasDondeEsSocioAsync(dni, cancellationToken);
-
-        var alertas = GenerarAlertasPersona(persona);
 
         return new NodoRed
         {
-            Identificador = dni,
-            Tipo = TipoNodo.Persona,
-            Nombre = persona.NombreCompleto,
+            Identificador = reporte.NumeroDocumento,
+            Tipo = tipoNodo,
+            Nombre = nombre,
             NivelProfundidad = nivel,
-            Score = persona.ScoreCrediticio,
-            EstadoCredito = persona.Estado,
+            Score = scoreNumerico,
+            NivelRiesgoTexto = nivelRiesgoTexto,
+            EstadoCredito = estadoCredito,
             Alertas = alertas,
-            Deudas = persona.Deudas,
-            Conexiones = empresas.Select(e => new ConexionNodo
-            {
-                Identificador = e.Ruc,
-                Tipo = TipoNodo.Empresa,
-                Nombre = e.RazonSocialEmpresa,
-                TipoRelacion = e.TipoRelacion
-            }).ToList()
+            Deudas = reporte.Deudas,
+            Conexiones = conexiones
         };
-    }
-
-    private async Task<NodoRed?> ObtenerNodoEmpresaAsync(
-        string ruc,
-        int nivel,
-        CancellationToken cancellationToken)
-    {
-        var empresa = await _equifaxClient.ConsultarEmpresaAsync(ruc, cancellationToken);
-        if (empresa == null) return null;
-
-        var socios = await _equifaxClient.ObtenerSociosDeEmpresaAsync(ruc, cancellationToken);
-
-        var alertas = GenerarAlertasEmpresa(empresa);
-
-        return new NodoRed
-        {
-            Identificador = ruc,
-            Tipo = TipoNodo.Empresa,
-            Nombre = empresa.RazonSocial,
-            NivelProfundidad = nivel,
-            Score = empresa.ScoreCrediticio,
-            EstadoCredito = empresa.EstadoCredito,
-            Alertas = alertas,
-            Deudas = empresa.Deudas,
-            Conexiones = socios.Select(s => new ConexionNodo
-            {
-                Identificador = s.Dni,
-                Tipo = TipoNodo.Persona,
-                Nombre = s.NombrePersona,
-                TipoRelacion = s.TipoRelacion
-            }).ToList()
-        };
-    }
-
-    private List<string> GenerarAlertasPersona(Persona persona)
-    {
-        var alertas = new List<string>();
-
-        if (persona.ScoreCrediticio.HasValue && persona.ScoreCrediticio < 500)
-            alertas.Add($"Score crediticio bajo: {persona.ScoreCrediticio}");
-
-        if (persona.Estado == EstadoCrediticio.Moroso)
-            alertas.Add("Persona en estado de morosidad");
-
-        if (persona.Estado == EstadoCrediticio.Castigado)
-            alertas.Add("Persona con deuda castigada");
-
-        var deudasVencidas = persona.Deudas.Where(d => d.EstaVencida).ToList();
-        if (deudasVencidas.Any())
-        {
-            var montoVencido = deudasVencidas.Sum(d => d.SaldoActual);
-            alertas.Add($"Deudas vencidas por S/ {montoVencido:N2}");
-        }
-
-        return alertas;
-    }
-
-    private List<string> GenerarAlertasEmpresa(Empresa empresa)
-    {
-        var alertas = new List<string>();
-
-        if (empresa.Estado?.ToUpper() != "ACTIVO")
-            alertas.Add($"Empresa con estado: {empresa.Estado}");
-
-        if (empresa.ScoreCrediticio.HasValue && empresa.ScoreCrediticio < 500)
-            alertas.Add($"Score crediticio bajo: {empresa.ScoreCrediticio}");
-
-        if (empresa.EstadoCredito == EstadoCrediticio.Moroso)
-            alertas.Add("Empresa en estado de morosidad");
-
-        var deudasVencidas = empresa.Deudas.Where(d => d.EstaVencida).ToList();
-        if (deudasVencidas.Any())
-        {
-            var montoVencido = deudasVencidas.Sum(d => d.SaldoActual);
-            alertas.Add($"Deudas vencidas por S/ {montoVencido:N2}");
-        }
-
-        return alertas;
     }
 }

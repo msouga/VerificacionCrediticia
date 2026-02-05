@@ -1,13 +1,15 @@
+using VerificacionCrediticia.Core.Enums;
+
 namespace VerificacionCrediticia.Core.Entities;
 
-public class RelacionSocietaria
+public class RelacionRepresentacion
 {
-    public string Dni { get; set; } = string.Empty;
-    public string NombrePersona { get; set; } = string.Empty;
-    public string Ruc { get; set; } = string.Empty;
-    public string RazonSocialEmpresa { get; set; } = string.Empty;
+    public string TipoDocumento { get; set; } = string.Empty;
+    public string NumeroDocumento { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
     public string TipoRelacion { get; set; } = string.Empty;
-    public decimal? PorcentajeParticipacion { get; set; }
-    public DateTime? FechaInicio { get; set; }
-    public bool EsActiva { get; set; } = true;
+    public string? Cargo { get; set; }
+    public string? FechaInicioCargo { get; set; }
+    public NivelRiesgo NivelRiesgo { get; set; }
+    public string? NivelRiesgoTexto { get; set; }
 }

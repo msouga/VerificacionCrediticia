@@ -12,6 +12,8 @@ public class EquifaxSettings
     public int CacheMinutes { get; set; } = 60;
     public bool UseSandbox { get; set; } = true;
     public bool UseMock { get; set; } = false;
+    public string? BillTo { get; set; }
+    public string? ShipTo { get; set; }
 
     public string EffectiveBaseUrl => UseSandbox
         ? "https://api.sandbox.equifax.com"

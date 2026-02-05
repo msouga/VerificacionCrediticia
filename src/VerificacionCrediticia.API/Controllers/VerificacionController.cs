@@ -20,11 +20,8 @@ public class VerificacionController : ControllerBase
     }
 
     /// <summary>
-    /// Evalúa una solicitud de crédito analizando la red de relaciones empresariales
+    /// Evalua una solicitud de credito analizando la red de relaciones empresariales
     /// </summary>
-    /// <param name="solicitud">Datos del solicitante y empresa</param>
-    /// <param name="cancellationToken">Token de cancelación</param>
-    /// <returns>Resultado de la evaluación con score y recomendación</returns>
     [HttpPost("evaluar")]
     [ProducesResponseType(typeof(ResultadoEvaluacionDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -34,7 +31,7 @@ public class VerificacionController : ControllerBase
         CancellationToken cancellationToken)
     {
         _logger.LogInformation(
-            "Iniciando evaluación para DNI: {Dni}, RUC: {Ruc}",
+            "Iniciando evaluacion para DNI: {Dni}, RUC: {Ruc}",
             solicitud.DniSolicitante,
             solicitud.RucEmpresa);
 
@@ -43,7 +40,7 @@ public class VerificacionController : ControllerBase
             var resultado = await _verificacionService.EvaluarSolicitudAsync(solicitud, cancellationToken);
 
             _logger.LogInformation(
-                "Evaluación completada. Score: {Score}, Recomendación: {Recomendacion}",
+                "Evaluacion completada. Score: {Score}, Recomendacion: {Recomendacion}",
                 resultado.ScoreFinal,
                 resultado.Recomendacion);
 
@@ -51,71 +48,71 @@ public class VerificacionController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            _logger.LogWarning(ex, "Error de validación en la solicitud");
+            _logger.LogWarning(ex, "Error de validacion en la solicitud");
             return BadRequest(new ProblemDetails
             {
-                Title = "Error de validación",
+                Title = "Error de validacion",
                 Detail = ex.Message,
                 Status = StatusCodes.Status400BadRequest
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error al procesar la evaluación");
+            _logger.LogError(ex, "Error al procesar la evaluacion");
             return StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails
             {
                 Title = "Error interno",
-                Detail = "Ocurrió un error al procesar la solicitud",
+                Detail = "Ocurrio un error al procesar la solicitud",
                 Status = StatusCodes.Status500InternalServerError
             });
         }
     }
 
     /// <summary>
-    /// Consulta el estado crediticio de una persona por DNI
+    /// Consulta el reporte crediticio de una persona por DNI
     /// </summary>
     [HttpGet("persona/{dni}")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ReporteCrediticioDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult> ConsultarPersona(
+    public async Task<ActionResult<ReporteCrediticioDto>> ConsultarPersona(
         string dni,
         [FromServices] IEquifaxApiClient equifaxClient,
         CancellationToken cancellationToken)
     {
-        var persona = await equifaxClient.ConsultarPersonaAsync(dni, cancellationToken);
+        var reporte = await equifaxClient.ConsultarReporteCrediticioAsync("1", dni, cancellationToken);
 
-        if (persona == null)
+        if (reporte == null)
             return NotFound(new ProblemDetails
             {
                 Title = "No encontrado",
-                Detail = $"No se encontró información para el DNI: {dni}",
+                Detail = $"No se encontro informacion para el DNI: {dni}",
                 Status = StatusCodes.Status404NotFound
             });
 
-        return Ok(persona);
+        return Ok(reporte);
     }
 
     /// <summary>
-    /// Consulta el estado crediticio de una empresa por RUC
+    /// Consulta el reporte crediticio de una empresa por RUC
     /// </summary>
     [HttpGet("empresa/{ruc}")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ReporteCrediticioDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult> ConsultarEmpresa(
+    public async Task<ActionResult<ReporteCrediticioDto>> ConsultarEmpresa(
         string ruc,
         [FromServices] IEquifaxApiClient equifaxClient,
         CancellationToken cancellationToken)
     {
-        var empresa = await equifaxClient.ConsultarEmpresaAsync(ruc, cancellationToken);
+        var reporte = await equifaxClient.ConsultarReporteCrediticioAsync("6", ruc, cancellationToken);
 
-        if (empresa == null)
+        if (reporte == null)
             return NotFound(new ProblemDetails
             {
                 Title = "No encontrado",
-                Detail = $"No se encontró información para el RUC: {ruc}",
+                Detail = $"No se encontro informacion para el RUC: {ruc}",
                 Status = StatusCodes.Status404NotFound
             });
 
-        return Ok(empresa);
+        return Ok(reporte);
     }
 }

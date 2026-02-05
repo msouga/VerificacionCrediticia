@@ -28,9 +28,9 @@
               <span>{{ getTipoLabel(nodoSeleccionado.tipo) }}</span>
             </div>
             <div class="detalle-row">
-              <span class="label">Score:</span>
+              <span class="label">Riesgo:</span>
               <span [class]="'score-value ' + (nodoSeleccionado.score && nodoSeleccionado.score >= 600 ? 'score-ok' : 'score-bad')">
-                {{ nodoSeleccionado.score ?? 'N/A' }}
+                {{ nodoSeleccionado.nivelRiesgoTexto ?? 'N/A' }}
               </span>
             </div>
             <div class="detalle-row">

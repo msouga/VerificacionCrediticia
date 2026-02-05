@@ -1,10 +1,13 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using VerificacionCrediticia.Core.DTOs;
 using VerificacionCrediticia.Core.Entities;
 using VerificacionCrediticia.Core.Enums;
 using VerificacionCrediticia.Core.Interfaces;
+using VerificacionCrediticia.Core.Services;
 using VerificacionCrediticia.Infrastructure.Equifax.Models;
 
 namespace VerificacionCrediticia.Infrastructure.Equifax;
@@ -33,18 +36,54 @@ public class EquifaxApiClient : IEquifaxApiClient
         };
     }
 
-    public async Task<Persona?> ConsultarPersonaAsync(string dni, CancellationToken cancellationToken = default)
+    public async Task<ReporteCrediticioDto?> ConsultarReporteCrediticioAsync(
+        string tipoDocumento,
+        string numeroDocumento,
+        CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"persona_{dni}";
-        if (_cache.TryGetValue(cacheKey, out Persona? cachedPersona))
+        var cacheKey = $"reporte_{tipoDocumento}_{numeroDocumento}";
+        if (_cache.TryGetValue(cacheKey, out ReporteCrediticioDto? cached))
         {
-            return cachedPersona;
+            return cached;
         }
 
         var token = await _authService.GetAccessTokenAsync(cancellationToken);
-        var url = $"{_settings.EffectiveBaseUrl}/v1/credit/person/{dni}";
+        var url = $"{_settings.EffectiveBaseUrl}/datos-comerciales/transaction/execute";
 
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        var tipoPersona = tipoDocumento == "6" ? "2" : "1";
+        var requestBody = new
+        {
+            applicants = new
+            {
+                primaryConsumer = new
+                {
+                    personalInformation = new
+                    {
+                        id = numeroDocumento,
+                        tipoPersona,
+                        tipoDocumento
+                    }
+                }
+            },
+            productData = new
+            {
+                billTo = _settings.BillTo ?? "",
+                shipTo = _settings.ShipTo ?? "",
+                productName = "PEREPORT",
+                productOrch = "CREDITREPORTV2",
+                configuration = "Config",
+                customer = "PEREPRSM",
+                model = "CreditReportRSM"
+            }
+        };
+
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(requestBody, _jsonOptions),
+                Encoding.UTF8,
+                "application/json")
+        };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -55,188 +94,147 @@ public class EquifaxApiClient : IEquifaxApiClient
         }
 
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        var equifaxResponse = JsonSerializer.Deserialize<EquifaxPersonaResponse>(content, _jsonOptions);
+        var equifaxResponse = JsonSerializer.Deserialize<EquifaxCreditReportResponse>(content, _jsonOptions);
 
-        if (equifaxResponse == null) return null;
-
-        var persona = MapearPersona(equifaxResponse);
-
-        _cache.Set(cacheKey, persona, TimeSpan.FromMinutes(_settings.CacheMinutes));
-
-        return persona;
-    }
-
-    public async Task<Empresa?> ConsultarEmpresaAsync(string ruc, CancellationToken cancellationToken = default)
-    {
-        var cacheKey = $"empresa_{ruc}";
-        if (_cache.TryGetValue(cacheKey, out Empresa? cachedEmpresa))
-        {
-            return cachedEmpresa;
-        }
-
-        var token = await _authService.GetAccessTokenAsync(cancellationToken);
-        var url = $"{_settings.EffectiveBaseUrl}/v1/credit/business/{ruc}";
-
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
+        if (equifaxResponse?.Applicants?.PrimaryConsumer?.InterconnectResponse == null)
         {
             return null;
         }
 
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        var equifaxResponse = JsonSerializer.Deserialize<EquifaxEmpresaResponse>(content, _jsonOptions);
+        var reporte = MapearReporte(equifaxResponse, tipoDocumento, numeroDocumento);
 
-        if (equifaxResponse == null) return null;
+        _cache.Set(cacheKey, reporte, TimeSpan.FromMinutes(_settings.CacheMinutes));
 
-        var empresa = MapearEmpresa(equifaxResponse);
-
-        _cache.Set(cacheKey, empresa, TimeSpan.FromMinutes(_settings.CacheMinutes));
-
-        return empresa;
+        return reporte;
     }
 
-    public async Task<List<RelacionSocietaria>> ObtenerEmpresasDondeEsSocioAsync(
-        string dni,
-        CancellationToken cancellationToken = default)
+    private ReporteCrediticioDto MapearReporte(
+        EquifaxCreditReportResponse response,
+        string tipoDocumento,
+        string numeroDocumento)
     {
-        var cacheKey = $"empresas_socio_{dni}";
-        if (_cache.TryGetValue(cacheKey, out List<RelacionSocietaria>? cachedRelaciones))
+        var reporte = new ReporteCrediticioDto
         {
-            return cachedRelaciones ?? new List<RelacionSocietaria>();
+            TipoDocumento = tipoDocumento,
+            NumeroDocumento = numeroDocumento
+        };
+
+        var modulos = response.Applicants!.PrimaryConsumer!.InterconnectResponse!;
+
+        foreach (var modulo in modulos)
+        {
+            if (modulo.Data == null || !modulo.Data.Flag)
+                continue;
+
+            switch (modulo.Codigo)
+            {
+                case "602": // Directorio de Personas
+                    MapearDirectorioPersona(reporte, modulo.Data);
+                    break;
+
+                case "877" or "878": // Directorio SUNAT
+                    MapearDirectorioSunat(reporte, modulo.Data);
+                    break;
+
+                case "855" or "856": // Representantes Legales
+                    MapearRepresentantesLegales(reporte, modulo.Data);
+                    break;
+
+                case "875" or "876": // Empresas Relacionadas
+                    MapearEmpresasRelacionadas(reporte, modulo.Data);
+                    break;
+            }
         }
 
-        var token = await _authService.GetAccessTokenAsync(cancellationToken);
-        var url = $"{_settings.EffectiveBaseUrl}/v1/relations/person/{dni}/companies";
+        return reporte;
+    }
 
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    private void MapearDirectorioPersona(ReporteCrediticioDto reporte, EquifaxModuloData data)
+    {
+        var dir = data.DirectorioPersona;
+        if (dir == null) return;
 
-        var response = await _httpClient.SendAsync(request, cancellationToken);
+        var nombreCompleto = dir.Nombres ?? $"{dir.PrimerNombre} {dir.SegundoNombre} {dir.ApellidoPaterno} {dir.ApellidoMaterno}".Trim();
 
-        if (!response.IsSuccessStatusCode)
+        reporte.DatosPersona = new DatosPersonaDto
         {
-            return new List<RelacionSocietaria>();
+            Nombres = nombreCompleto,
+            FechaNacimiento = dir.FechaNacimiento,
+            EstadoCivil = dir.EstadoCivil,
+            Nacionalidad = dir.Nacionalidad
+        };
+    }
+
+    private void MapearDirectorioSunat(ReporteCrediticioDto reporte, EquifaxModuloData data)
+    {
+        var sunat = data.DirectorioSUNAT?.Directorio?.FirstOrDefault();
+        if (sunat == null) return;
+
+        reporte.DatosEmpresa = new DatosEmpresaDto
+        {
+            RazonSocial = sunat.RazonSocial ?? string.Empty,
+            NombreComercial = sunat.NombreComercial,
+            TipoContribuyente = sunat.TipoContribuyente,
+            EstadoContribuyente = sunat.EstadoContribuyente,
+            CondicionContribuyente = sunat.CondicionContribuyente,
+            InicioActividades = sunat.InicioActividades
+        };
+    }
+
+    private void MapearRepresentantesLegales(ReporteCrediticioDto reporte, EquifaxModuloData data)
+    {
+        var reps = data.RepresentantesLegales;
+        if (reps == null) return;
+
+        if (reps.RepresentadoPor?.RepresentadoPor != null)
+        {
+            reporte.RepresentadoPor = reps.RepresentadoPor.RepresentadoPor
+                .Select(MapearRepresentanteLegal)
+                .ToList();
         }
 
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        var equifaxResponse = JsonSerializer.Deserialize<List<EquifaxRelacionResponse>>(content, _jsonOptions);
-
-        var relaciones = equifaxResponse?.Select(MapearRelacion).ToList() ?? new List<RelacionSocietaria>();
-
-        _cache.Set(cacheKey, relaciones, TimeSpan.FromMinutes(_settings.CacheMinutes));
-
-        return relaciones;
-    }
-
-    public async Task<List<RelacionSocietaria>> ObtenerSociosDeEmpresaAsync(
-        string ruc,
-        CancellationToken cancellationToken = default)
-    {
-        var cacheKey = $"socios_empresa_{ruc}";
-        if (_cache.TryGetValue(cacheKey, out List<RelacionSocietaria>? cachedRelaciones))
+        if (reps.RepresentantesDe?.RepresentantesDe != null)
         {
-            return cachedRelaciones ?? new List<RelacionSocietaria>();
+            reporte.RepresentantesDe = reps.RepresentantesDe.RepresentantesDe
+                .Select(MapearRepresentanteLegal)
+                .ToList();
         }
-
-        var token = await _authService.GetAccessTokenAsync(cancellationToken);
-        var url = $"{_settings.EffectiveBaseUrl}/v1/relations/company/{ruc}/partners";
-
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return new List<RelacionSocietaria>();
-        }
-
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        var equifaxResponse = JsonSerializer.Deserialize<List<EquifaxRelacionResponse>>(content, _jsonOptions);
-
-        var relaciones = equifaxResponse?.Select(MapearRelacion).ToList() ?? new List<RelacionSocietaria>();
-
-        _cache.Set(cacheKey, relaciones, TimeSpan.FromMinutes(_settings.CacheMinutes));
-
-        return relaciones;
     }
 
-    private Persona MapearPersona(EquifaxPersonaResponse response)
+    private RepresentanteLegalDto MapearRepresentanteLegal(EquifaxRepresentanteLegal rep)
     {
-        return new Persona
+        var riesgoTexto = rep.ScoreHistoricos?.ScoreActual?.Riesgo;
+        return new RepresentanteLegalDto
         {
-            Dni = response.Dni ?? string.Empty,
-            Nombres = response.Nombres ?? string.Empty,
-            Apellidos = response.Apellidos ?? string.Empty,
-            ScoreCrediticio = response.Score,
-            Estado = MapearEstadoCrediticio(response.Calificacion),
-            Deudas = response.Deudas?.Select(MapearDeuda).ToList() ?? new List<DeudaRegistrada>(),
-            EmpresasDondeEsSocio = response.EmpresasRelacionadas?.Select(MapearRelacion).ToList()
-                ?? new List<RelacionSocietaria>(),
-            FechaConsulta = DateTime.UtcNow
+            TipoDocumento = rep.TipoDocumento ?? string.Empty,
+            NumeroDocumento = rep.NumeroDocumento ?? string.Empty,
+            Nombre = rep.Nombre ?? string.Empty,
+            Cargo = rep.Cargo,
+            FechaInicioCargo = rep.FechaInicioCargo,
+            NivelRiesgoTexto = riesgoTexto,
+            NivelRiesgo = NivelRiesgoMapper.ParseRiesgo(riesgoTexto)
         };
     }
 
-    private Empresa MapearEmpresa(EquifaxEmpresaResponse response)
+    private void MapearEmpresasRelacionadas(ReporteCrediticioDto reporte, EquifaxModuloData data)
     {
-        return new Empresa
-        {
-            Ruc = response.Ruc ?? string.Empty,
-            RazonSocial = response.RazonSocial ?? string.Empty,
-            NombreComercial = response.NombreComercial,
-            Estado = response.Estado,
-            Direccion = response.Direccion,
-            ScoreCrediticio = response.Score,
-            EstadoCredito = MapearEstadoCrediticio(response.Calificacion),
-            Deudas = response.Deudas?.Select(MapearDeuda).ToList() ?? new List<DeudaRegistrada>(),
-            Socios = response.Socios?.Select(MapearRelacion).ToList() ?? new List<RelacionSocietaria>(),
-            FechaConsulta = DateTime.UtcNow
-        };
-    }
+        var empRel = data.EmpresasRelacionadas?.EmpresaRelacionada;
+        if (empRel == null) return;
 
-    private DeudaRegistrada MapearDeuda(EquifaxDeudaResponse response)
-    {
-        return new DeudaRegistrada
-        {
-            Entidad = response.Entidad ?? string.Empty,
-            TipoDeuda = response.TipoDeuda ?? string.Empty,
-            MontoOriginal = response.MontoOriginal,
-            SaldoActual = response.SaldoActual,
-            DiasVencidos = response.DiasVencidos,
-            Calificacion = response.Calificacion ?? string.Empty,
-            FechaVencimiento = response.FechaVencimiento
-        };
-    }
-
-    private RelacionSocietaria MapearRelacion(EquifaxRelacionResponse response)
-    {
-        return new RelacionSocietaria
-        {
-            Dni = response.Dni ?? string.Empty,
-            NombrePersona = response.NombrePersona ?? string.Empty,
-            Ruc = response.Ruc ?? string.Empty,
-            RazonSocialEmpresa = response.RazonSocial ?? string.Empty,
-            TipoRelacion = response.TipoRelacion ?? string.Empty,
-            PorcentajeParticipacion = response.PorcentajeParticipacion,
-            FechaInicio = response.FechaInicio,
-            EsActiva = response.Activo
-        };
-    }
-
-    private EstadoCrediticio MapearEstadoCrediticio(string? calificacion)
-    {
-        return calificacion?.ToUpper() switch
-        {
-            "NORMAL" or "0" or "A" => EstadoCrediticio.Normal,
-            "CPP" or "1" or "B" => EstadoCrediticio.ConProblemasPotenciales,
-            "DEFICIENTE" or "2" or "C" => EstadoCrediticio.Moroso,
-            "DUDOSO" or "3" or "D" => EstadoCrediticio.EnCobranza,
-            "PERDIDA" or "4" or "E" => EstadoCrediticio.Castigado,
-            _ => EstadoCrediticio.SinInformacion
-        };
+        reporte.EmpresasRelacionadas = empRel
+            .Select(e =>
+            {
+                var riesgoTexto = e.ScoreHistoricos?.ScoreActual?.Riesgo;
+                return new EmpresaRelacionadaDto
+                {
+                    TipoDocumento = e.TipoDocumento ?? string.Empty,
+                    NumeroDocumento = e.NumeroDocumento ?? string.Empty,
+                    Nombre = e.Nombre ?? string.Empty,
+                    Relacion = e.Relacion,
+                    NivelRiesgoTexto = riesgoTexto,
+                    NivelRiesgo = NivelRiesgoMapper.ParseRiesgo(riesgoTexto)
+                };
+            })
+            .ToList();
     }
 }

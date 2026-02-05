@@ -1,15 +1,16 @@
-import { EstadoCrediticio } from './enums';
-import { DeudaRegistrada, RelacionSocietaria } from './persona.model';
+import { EstadoCrediticio, NivelRiesgo } from './enums';
+import { DeudaRegistrada } from './persona.model';
 
 export interface Empresa {
   ruc: string;
   razonSocial: string;
   nombreComercial?: string;
-  estado?: string;
-  direccion?: string;
-  scoreCrediticio?: number;
+  tipoContribuyente?: string;
+  estadoContribuyente?: string;
+  condicionContribuyente?: string;
+  nivelRiesgo: NivelRiesgo;
+  nivelRiesgoTexto?: string;
   estadoCredito: EstadoCrediticio;
   deudas: DeudaRegistrada[];
-  socios: RelacionSocietaria[];
   fechaConsulta?: string;
 }

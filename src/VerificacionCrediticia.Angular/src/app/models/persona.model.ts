@@ -1,4 +1,4 @@
-import { EstadoCrediticio } from './enums';
+import { EstadoCrediticio, NivelRiesgo } from './enums';
 
 export interface DeudaRegistrada {
   entidad: string;
@@ -11,25 +11,13 @@ export interface DeudaRegistrada {
   estaVencida: boolean;
 }
 
-export interface RelacionSocietaria {
-  dni: string;
-  nombrePersona: string;
-  ruc: string;
-  razonSocialEmpresa: string;
-  tipoRelacion: string;
-  porcentajeParticipacion?: number;
-  fechaInicio?: string;
-  esActiva: boolean;
-}
-
 export interface Persona {
   dni: string;
   nombres: string;
-  apellidos: string;
   nombreCompleto: string;
-  scoreCrediticio?: number;
+  nivelRiesgo: NivelRiesgo;
+  nivelRiesgoTexto?: string;
   estado: EstadoCrediticio;
   deudas: DeudaRegistrada[];
-  empresasDondeEsSocio: RelacionSocietaria[];
   fechaConsulta?: string;
 }
