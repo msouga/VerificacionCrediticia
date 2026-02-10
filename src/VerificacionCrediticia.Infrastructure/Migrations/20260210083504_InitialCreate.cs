@@ -15,16 +15,16 @@ namespace VerificacionCrediticia.Infrastructure.Migrations
                 name: "Expedientes",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    DniSolicitante = table.Column<string>(type: "TEXT", maxLength: 8, nullable: false),
-                    NombresSolicitante = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    ApellidosSolicitante = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    RucEmpresa = table.Column<string>(type: "TEXT", maxLength: 11, nullable: true),
-                    RazonSocialEmpresa = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    Estado = table.Column<int>(type: "INTEGER", nullable: false),
-                    FechaCreacion = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    FechaEvaluacion = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    DniSolicitante = table.Column<string>(type: "nvarchar(8)", maxLength: 8, nullable: false),
+                    NombresSolicitante = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    ApellidosSolicitante = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RucEmpresa = table.Column<string>(type: "nvarchar(11)", maxLength: 11, nullable: true),
+                    RazonSocialEmpresa = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Estado = table.Column<int>(type: "int", nullable: false),
+                    FechaCreacion = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    FechaEvaluacion = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -35,18 +35,18 @@ namespace VerificacionCrediticia.Infrastructure.Migrations
                 name: "ReglasEvaluacion",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    Nombre = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    Descripcion = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    Campo = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    Operador = table.Column<int>(type: "INTEGER", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Nombre = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Descripcion = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    Campo = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Operador = table.Column<int>(type: "int", nullable: false),
                     Valor = table.Column<decimal>(type: "decimal(18,6)", nullable: false),
                     Peso = table.Column<decimal>(type: "decimal(5,4)", nullable: false),
-                    Resultado = table.Column<int>(type: "INTEGER", nullable: false),
-                    Activa = table.Column<bool>(type: "INTEGER", nullable: false),
-                    Orden = table.Column<int>(type: "INTEGER", nullable: false),
-                    FechaCreacion = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Resultado = table.Column<int>(type: "int", nullable: false),
+                    Activa = table.Column<bool>(type: "bit", nullable: false),
+                    Orden = table.Column<int>(type: "int", nullable: false),
+                    FechaCreacion = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -57,16 +57,16 @@ namespace VerificacionCrediticia.Infrastructure.Migrations
                 name: "TiposDocumento",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    Nombre = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    Codigo = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
-                    AnalyzerId = table.Column<string>(type: "TEXT", maxLength: 50, nullable: true),
-                    EsObligatorio = table.Column<bool>(type: "INTEGER", nullable: false),
-                    Orden = table.Column<int>(type: "INTEGER", nullable: false),
-                    Descripcion = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    Activo = table.Column<bool>(type: "INTEGER", nullable: false),
-                    FechaCreacion = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Nombre = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Codigo = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    AnalyzerId = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    EsObligatorio = table.Column<bool>(type: "bit", nullable: false),
+                    Orden = table.Column<int>(type: "int", nullable: false),
+                    Descripcion = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    Activo = table.Column<bool>(type: "bit", nullable: false),
+                    FechaCreacion = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -77,14 +77,14 @@ namespace VerificacionCrediticia.Infrastructure.Migrations
                 name: "ResultadosEvaluacion",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    ExpedienteId = table.Column<int>(type: "INTEGER", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ExpedienteId = table.Column<int>(type: "int", nullable: false),
                     ScoreFinal = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
-                    Recomendacion = table.Column<int>(type: "INTEGER", nullable: false),
-                    NivelRiesgo = table.Column<int>(type: "INTEGER", nullable: false),
+                    Recomendacion = table.Column<int>(type: "int", nullable: false),
+                    NivelRiesgo = table.Column<int>(type: "int", nullable: false),
                     ResultadoCompletoJson = table.Column<string>(type: "TEXT", nullable: false),
-                    FechaEvaluacion = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    FechaEvaluacion = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -101,16 +101,16 @@ namespace VerificacionCrediticia.Infrastructure.Migrations
                 name: "DocumentosProcesados",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    ExpedienteId = table.Column<int>(type: "INTEGER", nullable: false),
-                    TipoDocumentoId = table.Column<int>(type: "INTEGER", nullable: false),
-                    NombreArchivo = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
-                    FechaProcesado = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Estado = table.Column<int>(type: "INTEGER", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ExpedienteId = table.Column<int>(type: "int", nullable: false),
+                    TipoDocumentoId = table.Column<int>(type: "int", nullable: false),
+                    NombreArchivo = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
+                    FechaProcesado = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Estado = table.Column<int>(type: "int", nullable: false),
                     DatosExtraidosJson = table.Column<string>(type: "TEXT", nullable: true),
                     ConfianzaPromedio = table.Column<decimal>(type: "decimal(5,4)", nullable: true),
-                    ErrorMensaje = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
+                    ErrorMensaje = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true)
                 },
                 constraints: table =>
                 {
