@@ -24,6 +24,7 @@ export class MainLayoutComponent {
     { label: 'Dashboard', icon: 'dashboard', route: '/' },
     { label: 'Expediente', icon: 'folder_open', route: '/expediente' },
     { label: 'Evaluar', icon: 'search', route: '/evaluar' },
-    { label: 'Historial', icon: 'history', route: '/historial' }
+    { label: 'Historial', icon: 'history', route: '/historial' },
+    { label: 'Configuracion', icon: 'settings', route: '/configuracion' }
   ];
 }

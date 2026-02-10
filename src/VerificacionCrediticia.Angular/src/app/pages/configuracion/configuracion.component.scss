@@ -1,0 +1,49 @@
+.configuracion-container {
+  padding: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+
+  h2 {
+    margin-bottom: 16px;
+    font-weight: 500;
+  }
+}
+
+.spinner-container {
+  display: flex;
+  justify-content: center;
+  padding: 48px;
+}
+
+.tipos-table {
+  width: 100%;
+
+  code {
+    font-size: 13px;
+    background: rgba(0, 0, 0, 0.04);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+}
+
+.orden-input {
+  width: 56px;
+  padding: 4px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+
+  &:focus {
+    outline: none;
+    border-color: #1976d2;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.inactivo {
+  opacity: 0.5;
+}

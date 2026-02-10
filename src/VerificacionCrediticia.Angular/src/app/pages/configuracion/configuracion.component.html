@@ -1,0 +1,75 @@
+<div class="configuracion-container">
+  <h2>Configuracion de Tipos de Documento</h2>
+
+  @if (cargando) {
+    <div class="spinner-container">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+  } @else {
+    <mat-card>
+      <mat-card-content>
+        <table mat-table [dataSource]="tipos" class="tipos-table">
+
+          <ng-container matColumnDef="nombre">
+            <th mat-header-cell *matHeaderCellDef>Nombre</th>
+            <td mat-cell *matCellDef="let tipo">{{ tipo.nombre }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="codigo">
+            <th mat-header-cell *matHeaderCellDef>Codigo</th>
+            <td mat-cell *matCellDef="let tipo">
+              <code>{{ tipo.codigo }}</code>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="analyzerId">
+            <th mat-header-cell *matHeaderCellDef>Analyzer ID</th>
+            <td mat-cell *matCellDef="let tipo">
+              <code>{{ tipo.analyzerId || '—' }}</code>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="obligatorio">
+            <th mat-header-cell *matHeaderCellDef>Obligatorio</th>
+            <td mat-cell *matCellDef="let tipo">
+              <mat-slide-toggle
+                [checked]="tipo.esObligatorio"
+                [disabled]="actualizandoId === tipo.id"
+                (change)="tipo.esObligatorio = $event.checked; actualizarTipo(tipo)">
+              </mat-slide-toggle>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="activo">
+            <th mat-header-cell *matHeaderCellDef>Activo</th>
+            <td mat-cell *matCellDef="let tipo">
+              <mat-slide-toggle
+                [checked]="tipo.activo"
+                [disabled]="actualizandoId === tipo.id"
+                (change)="tipo.activo = $event.checked; actualizarTipo(tipo)">
+              </mat-slide-toggle>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="orden">
+            <th mat-header-cell *matHeaderCellDef>Orden</th>
+            <td mat-cell *matCellDef="let tipo">
+              <input
+                type="number"
+                class="orden-input"
+                [value]="tipo.orden"
+                [disabled]="actualizandoId === tipo.id"
+                (blur)="onOrdenBlur(tipo, $event)"
+                min="0"
+                max="99">
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"
+              [class.inactivo]="!row.activo"></tr>
+        </table>
+      </mat-card-content>
+    </mat-card>
+  }
+</div>

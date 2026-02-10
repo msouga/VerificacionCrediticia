@@ -35,10 +35,10 @@ public class DatabaseSeeder
         }
     }
 
-    private async Task SeedTiposDocumentoAsync()
+    private Task SeedTiposDocumentoAsync()
     {
         if (_context.TiposDocumento.Any())
-            return;
+            return Task.CompletedTask;
 
         var tiposDocumento = new List<TipoDocumento>
         {
@@ -87,7 +87,7 @@ public class DatabaseSeeder
                 Nombre = "Ficha RUC",
                 Codigo = "FICHA_RUC",
                 AnalyzerId = null,
-                EsObligatorio = true,
+                EsObligatorio = false,
                 Orden = 5,
                 Descripcion = "Ficha RUC de la empresa",
                 Activo = true
@@ -96,12 +96,13 @@ public class DatabaseSeeder
 
         _context.TiposDocumento.AddRange(tiposDocumento);
         _logger.LogInformation("Added {Count} tipos de documento", tiposDocumento.Count);
+        return Task.CompletedTask;
     }
 
-    private async Task SeedReglasEvaluacionAsync()
+    private Task SeedReglasEvaluacionAsync()
     {
         if (_context.ReglasEvaluacion.Any())
-            return;
+            return Task.CompletedTask;
 
         var reglas = new List<ReglaEvaluacion>
         {
@@ -193,5 +194,6 @@ public class DatabaseSeeder
 
         _context.ReglasEvaluacion.AddRange(reglas);
         _logger.LogInformation("Added {Count} reglas de evaluación", reglas.Count);
+        return Task.CompletedTask;
     }
 }

@@ -11,6 +11,9 @@ import { EstadoResultados } from '../models/estado-resultados.model';
 import {
   Expediente, CrearExpedienteRequest, TipoDocumento
 } from '../models/expediente.model';
+import {
+  TipoDocumentoConfig, ActualizarTipoDocumentoRequest
+} from '../models/configuracion.model';
 
 @Injectable({ providedIn: 'root' })
 export class VerificacionApiService {
@@ -206,6 +209,21 @@ export class VerificacionApiService {
   getTiposDocumento(): Observable<TipoDocumento[]> {
     return this.http.get<TipoDocumento[]>(
       `${this.baseUrl}/api/expedientes/tipos-documento`
+    );
+  }
+
+  // Configuracion
+
+  getTiposDocumentoConfig(): Observable<TipoDocumentoConfig[]> {
+    return this.http.get<TipoDocumentoConfig[]>(
+      `${this.baseUrl}/api/configuracion/tipos-documento`
+    );
+  }
+
+  actualizarTipoDocumento(id: number, data: ActualizarTipoDocumentoRequest): Observable<TipoDocumentoConfig> {
+    return this.http.put<TipoDocumentoConfig>(
+      `${this.baseUrl}/api/configuracion/tipos-documento/${id}`,
+      data
     );
   }
 

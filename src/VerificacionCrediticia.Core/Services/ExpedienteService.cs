@@ -221,7 +221,9 @@ public class ExpedienteService : IExpedienteService
             Id = t.Id,
             Nombre = t.Nombre,
             Codigo = t.Codigo,
+            AnalyzerId = t.AnalyzerId,
             EsObligatorio = t.EsObligatorio,
+            Activo = t.Activo,
             Orden = t.Orden,
             Descripcion = t.Descripcion
         }).ToList();
@@ -461,7 +463,9 @@ public class ExpedienteService : IExpedienteService
                 Id = t.Id,
                 Nombre = t.Nombre,
                 Codigo = t.Codigo,
+                AnalyzerId = t.AnalyzerId,
                 EsObligatorio = t.EsObligatorio,
+                Activo = t.Activo,
                 Orden = t.Orden,
                 Descripcion = t.Descripcion
             }).ToList();
