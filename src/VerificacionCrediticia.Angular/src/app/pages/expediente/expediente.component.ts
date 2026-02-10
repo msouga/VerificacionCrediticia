@@ -8,19 +8,20 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog } from '@angular/material/dialog';
 import { DecimalPipe, PercentPipe, DatePipe } from '@angular/common';
 import { VerificacionApiService } from '../../services/verificacion-api.service';
 import {
   Expediente, TipoDocumento, DocumentoProcesadoResumen,
   EstadoExpediente, EstadoDocumento, ResultadoRegla
 } from '../../models/expediente.model';
+import { EvaluarDialogComponent, EvaluarDialogResult } from './evaluar-dialog.component';
 
 interface DocumentoSlot {
   tipo: TipoDocumento;
   documento: DocumentoProcesadoResumen | null;
   archivo: File | null;
   loading: boolean;
-  progreso: string[];
   error: string | null;
   dragOver: boolean;
 }
@@ -40,7 +41,6 @@ interface DocumentoSlot {
 export class ExpedienteComponent implements OnInit {
   expediente: Expediente | null = null;
   loading = false;
-  evaluando = false;
   error: string | null = null;
 
   documentoSlots: DocumentoSlot[] = [];
@@ -52,7 +52,8 @@ export class ExpedienteComponent implements OnInit {
     private api: VerificacionApiService,
     private route: ActivatedRoute,
     private router: Router,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private dialog: MatDialog
   ) {}
 
   ngOnInit(): void {
@@ -105,7 +106,6 @@ export class ExpedienteComponent implements OnInit {
           documento: doc,
           archivo: null,
           loading: false,
-          progreso: [],
           error: null,
           dragOver: false
         };
@@ -155,71 +155,53 @@ export class ExpedienteComponent implements OnInit {
     }
     slot.archivo = archivo;
     this.cdr.markForCheck();
-    this.procesarDocumento(slot);
+    this.subirDocumento(slot);
   }
 
-  async procesarDocumento(slot: DocumentoSlot): Promise<void> {
+  private subirDocumento(slot: DocumentoSlot): void {
     if (!slot.archivo || !this.expediente) return;
 
     slot.loading = true;
     slot.error = null;
-    slot.progreso = [];
     this.cdr.markForCheck();
 
-    try {
-      if (slot.documento) {
-        await this.api.reemplazarDocumentoExpediente(
-          this.expediente.id,
-          slot.documento.id,
-          slot.archivo,
-          (msg: string) => {
-            slot.progreso = [...slot.progreso, msg];
-            this.cdr.markForCheck();
-          }
-        );
-      } else {
-        await this.api.procesarDocumentoExpediente(
-          this.expediente.id,
-          slot.tipo.codigo,
-          slot.archivo,
-          (msg: string) => {
-            slot.progreso = [...slot.progreso, msg];
-            this.cdr.markForCheck();
-          }
-        );
-      }
+    const upload$ = slot.documento
+      ? this.api.reemplazarDocumento(this.expediente.id, slot.documento.id, slot.archivo)
+      : this.api.subirDocumento(this.expediente.id, slot.tipo.codigo, slot.archivo);
 
-      slot.loading = false;
-      slot.archivo = null;
-      this.cdr.markForCheck();
-      this.recargarExpediente();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al procesar';
-      slot.error = message;
-      slot.loading = false;
-      slot.archivo = null;
-      this.cdr.markForCheck();
-    }
+    upload$.subscribe({
+      next: () => {
+        slot.loading = false;
+        slot.archivo = null;
+        this.cdr.markForCheck();
+        this.recargarExpediente();
+      },
+      error: (err) => {
+        const message = err.error?.detail || err.message || 'Error al subir archivo';
+        slot.error = message;
+        slot.loading = false;
+        slot.archivo = null;
+        this.cdr.markForCheck();
+      }
+    });
   }
 
   evaluar(): void {
     if (!this.expediente || !this.expediente.puedeEvaluar) return;
 
-    this.evaluando = true;
-    this.error = null;
-    this.cdr.markForCheck();
+    const dialogRef = this.dialog.open(EvaluarDialogComponent, {
+      data: { expedienteId: this.expediente.id },
+      disableClose: true
+    });
 
-    this.api.evaluarExpediente(this.expediente.id).subscribe({
-      next: (exp) => {
-        this.expediente = exp;
-        this.evaluando = false;
+    dialogRef.afterClosed().subscribe((result?: EvaluarDialogResult) => {
+      if (result?.expediente) {
+        this.expediente = result.expediente;
         this.buildSlots();
         this.cdr.markForCheck();
-      },
-      error: (err) => {
-        this.error = err.error?.detail || err.message || 'Error al evaluar';
-        this.evaluando = false;
-        this.cdr.markForCheck();
+      } else if (result?.cancelado || result?.error) {
+        // Recargar para ver estado actualizado de documentos parcialmente procesados
+        this.recargarExpediente();
       }
     });
   }
@@ -254,7 +236,8 @@ export class ExpedienteComponent implements OnInit {
       [EstadoDocumento.Pendiente]: 'hourglass_empty',
       [EstadoDocumento.Procesando]: 'sync',
       [EstadoDocumento.Procesado]: 'check_circle',
-      [EstadoDocumento.Error]: 'error'
+      [EstadoDocumento.Error]: 'error',
+      [EstadoDocumento.Subido]: 'cloud_done'
     };
     return icons[estado] || 'help';
   }
@@ -264,7 +247,8 @@ export class ExpedienteComponent implements OnInit {
       [EstadoDocumento.Pendiente]: 'estado-pendiente',
       [EstadoDocumento.Procesando]: 'estado-procesando',
       [EstadoDocumento.Procesado]: 'estado-procesado',
-      [EstadoDocumento.Error]: 'estado-error'
+      [EstadoDocumento.Error]: 'estado-error',
+      [EstadoDocumento.Subido]: 'estado-subido'
     };
     return classes[estado] || '';
   }

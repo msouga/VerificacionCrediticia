@@ -15,6 +15,11 @@ public class ExpedientesController : ControllerBase
     private static readonly string[] _extensionesPermitidas = { ".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tiff" };
     private const long _tamanoMaximoBytes = 4 * 1024 * 1024; // 4 MB
 
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     public ExpedientesController(
         IExpedienteService expedienteService,
         ILogger<ExpedientesController> logger)
@@ -23,9 +28,6 @@ public class ExpedientesController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>
-    /// Listar expedientes con paginacion
-    /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(ListaExpedientesResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ListaExpedientesResponse>> ListarExpedientes(
@@ -40,9 +42,6 @@ public class ExpedientesController : ControllerBase
         return Ok(resultado);
     }
 
-    /// <summary>
-    /// Crear un nuevo expediente crediticio
-    /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(ExpedienteDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -69,9 +68,6 @@ public class ExpedientesController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Consultar un expediente con sus documentos
-    /// </summary>
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(ExpedienteDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -89,9 +85,6 @@ public class ExpedientesController : ControllerBase
         return Ok(expediente);
     }
 
-    /// <summary>
-    /// Actualizar descripcion de un expediente
-    /// </summary>
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(ExpedienteDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -118,9 +111,6 @@ public class ExpedientesController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Eliminar expedientes en lote
-    /// </summary>
     [HttpDelete]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> EliminarExpedientes([FromBody] EliminarExpedientesRequest request)
@@ -138,102 +128,77 @@ public class ExpedientesController : ControllerBase
     }
 
     /// <summary>
-    /// Procesar un documento para un expediente (SSE con progreso)
+    /// Subir un documento al expediente (solo almacena en blob, no procesa)
     /// </summary>
     [HttpPost("{id:int}/documentos/{codigoTipo}")]
-    public async Task ProcesarDocumento(
+    [ProducesResponseType(typeof(DocumentoProcesadoResumenDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<DocumentoProcesadoResumenDto>> SubirDocumento(
         int id,
         string codigoTipo,
-        IFormFile archivo,
-        CancellationToken cancellationToken)
+        IFormFile archivo)
     {
-        // Validaciones
         var error = ValidarArchivo(archivo);
         if (error != null)
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
+            return BadRequest(new ProblemDetails
             {
                 Title = "Archivo invalido",
                 Detail = error,
                 Status = 400
-            }, cancellationToken);
-            return;
-        }
-
-        // Iniciar SSE
-        Response.Headers.Append("Content-Type", "text/event-stream");
-        Response.Headers.Append("Cache-Control", "no-cache");
-        Response.Headers.Append("Connection", "keep-alive");
+            });
 
         _logger.LogInformation(
-            "Procesando documento {CodigoTipo} para expediente {Id}: {NombreArchivo}",
+            "Subiendo documento {CodigoTipo} para expediente {Id}: {NombreArchivo}",
             codigoTipo, id, archivo.FileName);
 
         try
         {
             using var stream = archivo.OpenReadStream();
-
-            var progreso = new Progress<string>(async mensaje =>
-            {
-                await EnviarEvento("progress", mensaje, cancellationToken);
-            });
-
-            var resultado = await _expedienteService.ProcesarDocumentoAsync(
-                id, codigoTipo, stream, archivo.FileName, progreso);
-
-            await EnviarEvento("progress", "Documento procesado correctamente", cancellationToken);
-
-            var json = JsonSerializer.Serialize(resultado, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-            await EnviarEvento("result", json, cancellationToken);
+            var resultado = await _expedienteService.SubirDocumentoAsync(
+                id, codigoTipo, stream, archivo.FileName);
+            return Ok(resultado);
         }
         catch (KeyNotFoundException ex)
         {
-            _logger.LogWarning(ex, "Recurso no encontrado: {Mensaje}", ex.Message);
-            await EnviarEvento("error", ex.Message, cancellationToken);
-        }
-        catch (NotSupportedException ex)
-        {
-            _logger.LogWarning(ex, "Tipo no soportado: {Mensaje}", ex.Message);
-            await EnviarEvento("error", ex.Message, cancellationToken);
+            return NotFound(new ProblemDetails
+            {
+                Title = "No encontrado",
+                Detail = ex.Message,
+                Status = 404
+            });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error procesando documento {CodigoTipo} para expediente {Id}",
+            _logger.LogError(ex, "Error subiendo documento {CodigoTipo} para expediente {Id}",
                 codigoTipo, id);
-            await EnviarEvento("error", "Error inesperado al procesar el documento", cancellationToken);
+            return StatusCode(500, new ProblemDetails
+            {
+                Title = "Error interno",
+                Detail = "No se pudo subir el documento",
+                Status = 500
+            });
         }
     }
 
     /// <summary>
-    /// Reemplazar un documento existente (SSE con progreso)
+    /// Reemplazar un documento existente (solo almacena en blob, no procesa)
     /// </summary>
     [HttpPut("{id:int}/documentos/{documentoId:int}")]
-    public async Task ReemplazarDocumento(
+    [ProducesResponseType(typeof(DocumentoProcesadoResumenDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<DocumentoProcesadoResumenDto>> ReemplazarDocumento(
         int id,
         int documentoId,
-        IFormFile archivo,
-        CancellationToken cancellationToken)
+        IFormFile archivo)
     {
         var error = ValidarArchivo(archivo);
         if (error != null)
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
+            return BadRequest(new ProblemDetails
             {
                 Title = "Archivo invalido",
                 Detail = error,
                 Status = 400
-            }, cancellationToken);
-            return;
-        }
-
-        Response.Headers.Append("Content-Type", "text/event-stream");
-        Response.Headers.Append("Cache-Control", "no-cache");
-        Response.Headers.Append("Connection", "keep-alive");
+            });
 
         _logger.LogInformation(
             "Reemplazando documento {DocumentoId} en expediente {Id}: {NombreArchivo}",
@@ -242,50 +207,8 @@ public class ExpedientesController : ControllerBase
         try
         {
             using var stream = archivo.OpenReadStream();
-
-            var progreso = new Progress<string>(async mensaje =>
-            {
-                await EnviarEvento("progress", mensaje, cancellationToken);
-            });
-
-            var resultado = await _expedienteService.ReemplazarDocumentoAsync(
-                id, documentoId, stream, archivo.FileName, progreso);
-
-            await EnviarEvento("progress", "Documento reemplazado correctamente", cancellationToken);
-
-            var json = JsonSerializer.Serialize(resultado, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-            await EnviarEvento("result", json, cancellationToken);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            await EnviarEvento("error", ex.Message, cancellationToken);
-        }
-        catch (InvalidOperationException ex)
-        {
-            await EnviarEvento("error", ex.Message, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error reemplazando documento {DocumentoId} en expediente {Id}", documentoId, id);
-            await EnviarEvento("error", "Error inesperado al reemplazar el documento", cancellationToken);
-        }
-    }
-
-    /// <summary>
-    /// Evaluar crediticiamente un expediente
-    /// </summary>
-    [HttpPost("{id:int}/evaluar")]
-    [ProducesResponseType(typeof(ExpedienteDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<ExpedienteDto>> EvaluarExpediente(int id)
-    {
-        try
-        {
-            var resultado = await _expedienteService.EvaluarExpedienteAsync(id);
+            var resultado = await _expedienteService.ReemplazarDocumentoSubidoAsync(
+                id, documentoId, stream, archivo.FileName);
             return Ok(resultado);
         }
         catch (KeyNotFoundException ex)
@@ -308,19 +231,61 @@ public class ExpedientesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error evaluando expediente {Id}", id);
+            _logger.LogError(ex, "Error reemplazando documento {DocumentoId} en expediente {Id}", documentoId, id);
             return StatusCode(500, new ProblemDetails
             {
                 Title = "Error interno",
-                Detail = "No se pudo evaluar el expediente",
+                Detail = "No se pudo reemplazar el documento",
                 Status = 500
             });
         }
     }
 
     /// <summary>
-    /// Listar tipos de documento activos
+    /// Evaluar expediente: procesa documentos pendientes con Content Understanding y aplica reglas (SSE)
     /// </summary>
+    [HttpPost("{id:int}/evaluar")]
+    public async Task EvaluarExpediente(int id, CancellationToken cancellationToken)
+    {
+        Response.Headers.Append("Content-Type", "text/event-stream");
+        Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("Connection", "keep-alive");
+
+        try
+        {
+            var progreso = new Progress<ProgresoEvaluacionDto>(async dto =>
+            {
+                var json = JsonSerializer.Serialize(dto, _jsonOptions);
+                await EnviarEvento("progress", json, cancellationToken);
+            });
+
+            var resultado = await _expedienteService.EvaluarExpedienteAsync(
+                id, progreso, cancellationToken);
+
+            var resultadoJson = JsonSerializer.Serialize(resultado, _jsonOptions);
+            await EnviarEvento("result", resultadoJson, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Evaluacion del expediente {Id} cancelada por el usuario", id);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "Recurso no encontrado: {Mensaje}", ex.Message);
+            await EnviarEvento("error", ex.Message, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Error de operacion: {Mensaje}", ex.Message);
+            await EnviarEvento("error", ex.Message, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error evaluando expediente {Id}", id);
+            await EnviarEvento("error", "Error inesperado al evaluar el expediente", cancellationToken);
+        }
+    }
+
     [HttpGet("tipos-documento")]
     [ProducesResponseType(typeof(List<TipoDocumentoDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<TipoDocumentoDto>>> GetTiposDocumento()

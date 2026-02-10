@@ -102,8 +102,11 @@
             <mat-panel-description>
               @if (slot.documento) {
                 {{ slot.documento.nombreArchivo }}
-                @if (slot.documento.confianzaPromedio !== null) {
+                @if (slot.documento.confianzaPromedio !== null && slot.documento.estado === 2) {
                   - Confianza: {{ slot.documento.confianzaPromedio | percent:'1.0-0' }}
+                }
+                @if (slot.documento.estado === 4) {
+                  - Pendiente de procesamiento
                 }
               } @else {
                 Sin documento
@@ -114,6 +117,33 @@
           <div class="slot-content">
             @if (slot.tipo.descripcion) {
               <p class="tipo-descripcion">{{ slot.tipo.descripcion }}</p>
+            }
+
+            <!-- Documento subido (pendiente de procesamiento) -->
+            @if (slot.documento && slot.documento.estado === 4) {
+              <div class="doc-resumen doc-subido">
+                <div class="doc-info">
+                  <mat-icon class="estado-subido">cloud_done</mat-icon>
+                  <div>
+                    <strong>{{ slot.documento.nombreArchivo }}</strong>
+                    <span class="doc-fecha">Subido: {{ slot.documento.fechaProcesado | date:'dd/MM/yyyy HH:mm' }}</span>
+                  </div>
+                </div>
+                <div class="doc-actions">
+                  <div class="upload-zone compact"
+                       [class.drag-over]="slot.dragOver"
+                       (dragover)="onDragOver($event, slot)"
+                       (dragleave)="onDragLeave($event, slot)"
+                       (drop)="onDrop($event, slot)">
+                    <input type="file"
+                           class="file-input-hidden"
+                           accept=".pdf,.jpg,.jpeg,.png,.bmp,.tiff"
+                           (change)="onFileSelected($event, slot)">
+                    <mat-icon>swap_horiz</mat-icon>
+                    <span>Reemplazar</span>
+                  </div>
+                </div>
+              </div>
             }
 
             <!-- Documento ya procesado -->
@@ -127,7 +157,6 @@
                   </div>
                 </div>
                 <div class="doc-actions">
-                  <!-- Zona de reemplazo -->
                   <div class="upload-zone compact"
                        [class.drag-over]="slot.dragOver"
                        (dragover)="onDragOver($event, slot)"
@@ -170,15 +199,11 @@
               </div>
             }
 
-            <!-- Progreso de procesamiento -->
+            <!-- Subiendo archivo -->
             @if (slot.loading) {
-              <div class="procesando-info">
-                <mat-spinner diameter="24"></mat-spinner>
-                <div class="progreso-mensajes">
-                  @for (msg of slot.progreso; track $index) {
-                    <span class="progreso-msg">{{ msg }}</span>
-                  }
-                </div>
+              <div class="subiendo-info">
+                <mat-spinner diameter="20"></mat-spinner>
+                <span>Subiendo archivo...</span>
               </div>
             }
 
@@ -205,23 +230,18 @@
         }
         <button mat-raised-button color="primary"
                 class="evaluar-btn"
-                [disabled]="!expediente.puedeEvaluar || evaluando"
+                [disabled]="!expediente.puedeEvaluar"
                 (click)="evaluar()"
                 [matTooltip]="!expediente.puedeEvaluar ? 'Complete todos los documentos obligatorios para evaluar' : ''">
-          @if (evaluando) {
-            <mat-spinner diameter="20" class="btn-spinner"></mat-spinner>
-            Evaluando...
-          } @else {
-            <ng-container>
-              <mat-icon>gavel</mat-icon>
-              Evaluar Expediente
-            </ng-container>
-          }
+          <ng-container>
+            <mat-icon>gavel</mat-icon>
+            Evaluar Expediente
+          </ng-container>
         </button>
         @if (!expediente.puedeEvaluar) {
           <p class="evaluar-hint">
             Faltan {{ expediente.totalDocumentosObligatorios - expediente.documentosObligatoriosCompletos }}
-            documento(s) obligatorio(s) por procesar
+            documento(s) obligatorio(s) por subir
           </p>
         }
       </div>

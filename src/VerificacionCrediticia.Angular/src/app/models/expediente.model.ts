@@ -9,7 +9,15 @@ export enum EstadoDocumento {
   Pendiente = 0,
   Procesando = 1,
   Procesado = 2,
-  Error = 3
+  Error = 3,
+  Subido = 4
+}
+
+export interface ProgresoEvaluacion {
+  archivo: string;
+  paso: string;
+  documentoActual: number;
+  totalDocumentos: number;
 }
 
 export enum ResultadoRegla {

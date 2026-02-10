@@ -83,6 +83,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(d => d.DatosExtraidosJson).HasColumnType("TEXT");
             entity.Property(d => d.ConfianzaPromedio).HasColumnType("decimal(5,4)");
             entity.Property(d => d.ErrorMensaje).HasMaxLength(1000);
+            entity.Property(d => d.BlobUri).HasMaxLength(500);
 
             // Enum como entero
             entity.Property(d => d.Estado)

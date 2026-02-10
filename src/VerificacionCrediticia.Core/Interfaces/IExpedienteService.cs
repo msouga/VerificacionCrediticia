@@ -9,8 +9,8 @@ public interface IExpedienteService
     Task<ListaExpedientesResponse> ListarExpedientesAsync(int pagina, int tamanoPagina);
     Task<ExpedienteDto> ActualizarExpedienteAsync(int id, ActualizarExpedienteRequest request);
     Task EliminarExpedientesAsync(List<int> ids);
-    Task<object> ProcesarDocumentoAsync(int expedienteId, string codigoTipo, Stream documentStream, string fileName, IProgress<string>? progreso = null);
-    Task<object> ReemplazarDocumentoAsync(int expedienteId, int documentoId, Stream documentStream, string fileName, IProgress<string>? progreso = null);
-    Task<ExpedienteDto> EvaluarExpedienteAsync(int expedienteId);
+    Task<DocumentoProcesadoResumenDto> SubirDocumentoAsync(int expedienteId, string codigoTipo, Stream stream, string fileName);
+    Task<DocumentoProcesadoResumenDto> ReemplazarDocumentoSubidoAsync(int expedienteId, int documentoId, Stream stream, string fileName);
+    Task<ExpedienteDto> EvaluarExpedienteAsync(int expedienteId, IProgress<ProgresoEvaluacionDto>? progreso = null, CancellationToken cancellationToken = default);
     Task<List<TipoDocumentoDto>> GetTiposDocumentoAsync();
 }

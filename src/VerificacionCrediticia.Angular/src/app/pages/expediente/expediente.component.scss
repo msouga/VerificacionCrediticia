@@ -150,6 +150,7 @@ mat-expansion-panel {
 .estado-procesando { color: #ff9800; }
 .estado-procesado { color: #4caf50; }
 .estado-error { color: #f44336; }
+.estado-subido { color: #1976d2; }
 
 .slot-content {
   padding: 8px 0;
@@ -261,26 +262,22 @@ mat-expansion-panel {
   margin-bottom: 12px;
 }
 
-// Procesando
-.procesando-info {
+// Subido
+.doc-subido {
+  border-left: 3px solid #1976d2;
+}
+
+// Subiendo
+.subiendo-info {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   padding: 12px;
-  background: #fff3e0;
+  background: #e3f2fd;
   border-radius: 8px;
   margin-top: 8px;
-
-  .progreso-mensajes {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .progreso-msg {
-    font-size: 0.85rem;
-    color: rgba(0, 0, 0, 0.7);
-  }
+  font-size: 0.85rem;
+  color: rgba(0, 0, 0, 0.7);
 }
 
 .slot-error {

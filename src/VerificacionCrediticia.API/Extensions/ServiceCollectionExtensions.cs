@@ -6,6 +6,7 @@ using VerificacionCrediticia.Infrastructure.Equifax;
 using VerificacionCrediticia.Infrastructure.Persistence;
 using VerificacionCrediticia.Infrastructure.Persistence.Repositories;
 using VerificacionCrediticia.Infrastructure.Reniec;
+using VerificacionCrediticia.Infrastructure.Storage;
 
 namespace VerificacionCrediticia.API.Extensions;
 
@@ -47,6 +48,9 @@ public static class ServiceCollectionExtensions
                 });
             }
         });
+
+        // Azure Blob Storage
+        services.AddSingleton<IBlobStorageService, BlobStorageService>();
 
         // Repositorios
         services.AddScoped<IExpedienteRepository, ExpedienteRepository>();

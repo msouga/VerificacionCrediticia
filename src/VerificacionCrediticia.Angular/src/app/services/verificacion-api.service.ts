@@ -10,7 +10,8 @@ import { BalanceGeneral } from '../models/balance-general.model';
 import { EstadoResultados } from '../models/estado-resultados.model';
 import {
   Expediente, CrearExpedienteRequest, ActualizarExpedienteRequest,
-  TipoDocumento, ListaExpedientesResponse
+  TipoDocumento, ListaExpedientesResponse,
+  DocumentoProcesadoResumen, ProgresoEvaluacion
 } from '../models/expediente.model';
 import {
   TipoDocumentoConfig, ActualizarTipoDocumentoRequest
@@ -91,8 +92,6 @@ export class VerificacionApiService {
           for (const line of lines) {
             if (line.startsWith('event: ')) {
               const eventType = line.substring(7).trim();
-              // El siguiente "data:" viene en la siguiente linea procesada
-              // Lo manejamos con un flag temporal
               (this as any)._currentEvent = eventType;
             } else if (line.startsWith('data: ')) {
               const data = line.substring(6);
@@ -249,62 +248,57 @@ export class VerificacionApiService {
     );
   }
 
-  evaluarExpediente(id: number): Observable<Expediente> {
-    return this.http.post<Expediente>(
-      `${this.baseUrl}/api/expedientes/${id}/evaluar`,
-      {}
-    );
-  }
-
-  procesarDocumentoExpediente(
+  // Upload simple (sin SSE) - solo sube archivo al blob
+  subirDocumento(
     expedienteId: number,
     codigoTipo: string,
-    archivo: File,
-    onProgress: (mensaje: string) => void
-  ): Promise<void> {
+    archivo: File
+  ): Observable<DocumentoProcesadoResumen> {
     const formData = new FormData();
     formData.append('archivo', archivo, archivo.name);
-
-    return this.procesarSSE<void>(
+    return this.http.post<DocumentoProcesadoResumen>(
       `${this.baseUrl}/api/expedientes/${expedienteId}/documentos/${codigoTipo}`,
-      formData,
-      onProgress,
-      () => { /* result se ignora, recargamos el expediente completo */ }
+      formData
     );
   }
 
-  reemplazarDocumentoExpediente(
+  // Reemplazar documento (sin SSE) - solo reemplaza archivo en blob
+  reemplazarDocumento(
     expedienteId: number,
     documentoId: number,
-    archivo: File,
-    onProgress: (mensaje: string) => void
-  ): Promise<void> {
+    archivo: File
+  ): Observable<DocumentoProcesadoResumen> {
     const formData = new FormData();
     formData.append('archivo', archivo, archivo.name);
-
-    return this.procesarSSE<void>(
+    return this.http.put<DocumentoProcesadoResumen>(
       `${this.baseUrl}/api/expedientes/${expedienteId}/documentos/${documentoId}`,
-      formData,
-      onProgress,
-      () => { /* result se ignora */ },
-      'PUT'
+      formData
     );
   }
 
-  private procesarSSE<T>(
-    url: string,
-    formData: FormData,
-    onProgress: (mensaje: string) => void,
-    onResult: (data: T) => void,
-    method: string = 'POST'
-  ): Promise<T> {
-    return new Promise<T>(async (resolve, reject) => {
+  // Evaluar expediente con SSE (procesa documentos + reglas)
+  evaluarExpedienteSSE(
+    expedienteId: number,
+    callbacks: {
+      onProgress: (progreso: ProgresoEvaluacion) => void;
+      onResult: (expediente: Expediente) => void;
+      onError: (error: string) => void;
+    },
+    abortSignal?: AbortSignal
+  ): Promise<void> {
+    return new Promise<void>(async (resolve, reject) => {
       try {
-        const response = await fetch(url, { method, body: formData });
+        const response = await fetch(
+          `${this.baseUrl}/api/expedientes/${expedienteId}/evaluar`,
+          {
+            method: 'POST',
+            signal: abortSignal
+          }
+        );
 
         if (!response.ok) {
           const error = await response.json();
-          reject(new Error(error.detail || error.title || 'Error al procesar'));
+          reject(new Error(error.detail || error.title || 'Error al evaluar'));
           return;
         }
 
@@ -317,7 +311,6 @@ export class VerificacionApiService {
         const decoder = new TextDecoder();
         let buffer = '';
         let currentEvent = '';
-        let resultado: T | null = null;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -336,15 +329,17 @@ export class VerificacionApiService {
               currentEvent = '';
 
               if (eventType === 'progress') {
-                this.zone.run(() => onProgress(data));
-              } else if (eventType === 'result') {
                 try {
-                  resultado = JSON.parse(data) as T;
-                  onResult(resultado);
+                  const progreso = JSON.parse(data) as ProgresoEvaluacion;
+                  this.zone.run(() => callbacks.onProgress(progreso));
                 } catch {
-                  // El resultado podría no ser JSON si T es void
+                  // Ignorar si no es JSON valido
                 }
+              } else if (eventType === 'result') {
+                const expediente = JSON.parse(data) as Expediente;
+                this.zone.run(() => callbacks.onResult(expediente));
               } else if (eventType === 'error') {
+                this.zone.run(() => callbacks.onError(data));
                 reject(new Error(data));
                 return;
               }
@@ -352,8 +347,12 @@ export class VerificacionApiService {
           }
         }
 
-        resolve(resultado as T);
+        resolve();
       } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          resolve(); // Cancelacion no es error
+          return;
+        }
         const message = err instanceof Error ? err.message : 'Error de conexion';
         reject(new Error(message));
       }

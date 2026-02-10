@@ -26,6 +26,9 @@ public class DocumentoProcesado
     [MaxLength(1000)]
     public string? ErrorMensaje { get; set; }
 
+    [MaxLength(500)]
+    public string? BlobUri { get; set; }
+
     // Navegación
     public virtual Expediente Expediente { get; set; } = null!;
     public virtual TipoDocumento TipoDocumento { get; set; } = null!;
