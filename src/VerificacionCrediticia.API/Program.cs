@@ -1,8 +1,17 @@
+using Azure.Identity;
 using Serilog;
 using VerificacionCrediticia.API.Extensions;
 using VerificacionCrediticia.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Azure Key Vault (solo en ambientes no-Development con KeyVaultName configurado)
+var keyVaultName = builder.Configuration["KeyVaultName"];
+if (!string.IsNullOrEmpty(keyVaultName))
+{
+    var keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
+    builder.Configuration.AddAzureKeyVault(keyVaultUri, new DefaultAzureCredential());
+}
 
 // Configurar Serilog desde appsettings
 builder.Host.UseSerilog((context, services, configuration) => configuration
