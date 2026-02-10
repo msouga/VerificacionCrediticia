@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -36,7 +36,7 @@ interface TendenciaDia {
   selector: 'app-home',
   standalone: true,
   imports: [
-    RouterLink, MatCardModule, MatButtonModule, MatIconModule,
+    MatCardModule, MatButtonModule, MatIconModule,
     MatTableModule, MatChipsModule, MatProgressBarModule,
     DatePipe, DecimalPipe
   ],
