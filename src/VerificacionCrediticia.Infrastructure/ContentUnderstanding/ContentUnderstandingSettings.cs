@@ -8,6 +8,8 @@ public class ContentUnderstandingSettings
     public string ApiKey { get; set; } = string.Empty;
     public string AnalyzerId { get; set; } = "dniperuano";
     public string VigenciaPoderesAnalyzerId { get; set; } = "vigenciaPoderes";
+    public string BalanceGeneralAnalyzerId { get; set; } = "balanceGeneral";
+    public string EstadoResultadosAnalyzerId { get; set; } = "estadoResultados";
     public string ApiVersion { get; set; } = "2025-11-01";
     public bool UseMock { get; set; } = true;
     public int PollingIntervalMs { get; set; } = 1000;

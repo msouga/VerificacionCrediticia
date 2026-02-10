@@ -65,5 +65,13 @@ appsettings.*.json
 !appsettings.Development.json.example
 *.env
 
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# Playwright MCP
+.playwright-mcp/
+
 # Test samples (datos personales)
 tests/samples/

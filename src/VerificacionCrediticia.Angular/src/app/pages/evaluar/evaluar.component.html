@@ -339,6 +339,489 @@
     </div>
   }
 
+  <!-- Subir Balance General -->
+  <mat-card class="upload-card">
+    <mat-card-header>
+      <mat-card-title>2. Balance General</mat-card-title>
+      <mat-card-subtitle>Suba el Balance General para extraer partidas contables y calcular ratios financieros</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="drop-zone"
+           [class.drag-over]="dragOverBalance"
+           [class.has-file]="archivoBalance"
+           (dragover)="onDragOverBalance($event)"
+           (dragleave)="onDragLeaveBalance($event)"
+           (drop)="onDropBalance($event)"
+           (click)="fileInputBalance.click()">
+        <input #fileInputBalance type="file" class="hidden-input"
+               accept=".pdf,.jpg,.jpeg,.png,.bmp,.tiff"
+               (change)="onFileSelectedBalance($event)">
+        @if (archivoBalance) {
+          <mat-icon class="file-icon">description</mat-icon>
+          <span class="file-name">{{ archivoBalance.name }}</span>
+          <span class="file-size">{{ (archivoBalance.size / 1024) | number:'1.0-0' }} KB</span>
+        } @else {
+          <mat-icon class="upload-icon">cloud_upload</mat-icon>
+          <span class="drop-text">Arrastre el archivo aqui o haga clic para seleccionar</span>
+          <span class="drop-hint">PDF, JPG, PNG (max. 4 MB)</span>
+        }
+      </div>
+
+      <div class="actions-row">
+        @if (loadingBalance) {
+          <button mat-flat-button color="primary" disabled>
+            <mat-spinner diameter="20"></mat-spinner>
+            <span>Procesando...</span>
+          </button>
+        } @else {
+          <button mat-flat-button color="primary"
+                  [disabled]="!archivoBalance"
+                  (click)="procesarBalance()">
+            <mat-icon>account_balance</mat-icon>
+            <span>Procesar Balance</span>
+          </button>
+        }
+        @if (archivoBalance) {
+          <button mat-stroked-button (click)="limpiarBalance()" [disabled]="loadingBalance">
+            <mat-icon>clear</mat-icon>
+            <span>Limpiar</span>
+          </button>
+        }
+      </div>
+
+      <!-- Progreso SSE -->
+      @if (balanceProgreso.length > 0) {
+        <div class="progreso-lista">
+          @for (msg of balanceProgreso; track $index) {
+            <div class="progreso-item" [class.ultimo]="$last && loadingBalance">
+              @if ($last && loadingBalance) {
+                <mat-spinner diameter="14"></mat-spinner>
+              } @else {
+                <mat-icon class="progreso-check">check_circle</mat-icon>
+              }
+              <span>{{ msg }}</span>
+            </div>
+          }
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Error Balance -->
+  @if (balanceError) {
+    <mat-card class="error-card">
+      <mat-card-content>
+        <mat-icon>error</mat-icon>
+        {{ balanceError }}
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!-- Resultado Balance General -->
+  @if (balanceGeneral) {
+    <div class="balance-resultado">
+      <div class="balance-header">
+        <mat-icon class="balance-header-icon">account_balance_wallet</mat-icon>
+        <div>
+          <h2>{{ balanceGeneral.razonSocial || 'Balance General' }}</h2>
+          <span class="balance-info">
+            RUC: {{ balanceGeneral.ruc || 'No disponible' }} |
+            Fecha: {{ balanceGeneral.fechaBalance || 'No disponible' }} |
+            Moneda: {{ balanceGeneral.moneda || 'N/D' }}
+          </span>
+        </div>
+        <div class="balance-confianza">
+          <span class="confianza-valor" [class]="getConfianzaColor(balanceGeneral.confianzaPromedio)">
+            {{ balanceGeneral.confianzaPromedio | percent:'1.0-0' }}
+          </span>
+          <span class="confianza-label">Confianza</span>
+        </div>
+      </div>
+
+      <!-- Validacion RUC Equifax -->
+      @if (balanceGeneral.rucValidado === true) {
+        <div class="reniec-validacion reniec-ok">
+          <mat-icon>verified</mat-icon>
+          <span>RUC verificado en Equifax</span>
+        </div>
+      } @else if (balanceGeneral.rucValidado === false) {
+        <div class="reniec-validacion reniec-error">
+          <mat-icon>warning</mat-icon>
+          <span>{{ balanceGeneral.mensajeValidacionRuc || 'RUC no encontrado en Equifax' }}</span>
+        </div>
+      } @else if (balanceGeneral.mensajeValidacionRuc) {
+        <div class="reniec-validacion reniec-warning">
+          <mat-icon>info</mat-icon>
+          <span>{{ balanceGeneral.mensajeValidacionRuc }}</span>
+        </div>
+      }
+
+      <!-- Resumen con totales -->
+      <div class="balance-resumen">
+        <div class="balance-card" [class]="'card-success'">
+          <div class="balance-card-header">
+            <mat-icon>trending_up</mat-icon>
+            <span>Total Activo</span>
+          </div>
+          <div class="balance-card-value">
+            {{ (balanceGeneral.totalActivo || 0) | currency:'PEN':'symbol':'1.0-0' }}
+          </div>
+        </div>
+
+        <div class="balance-card" [class]="'card-info'">
+          <div class="balance-card-header">
+            <mat-icon>trending_down</mat-icon>
+            <span>Total Pasivo</span>
+          </div>
+          <div class="balance-card-value">
+            {{ (balanceGeneral.totalPasivo || 0) | currency:'PEN':'symbol':'1.0-0' }}
+          </div>
+        </div>
+
+        <div class="balance-card" [class]="'card-warning'">
+          <div class="balance-card-header">
+            <mat-icon>account_balance</mat-icon>
+            <span>Patrimonio</span>
+          </div>
+          <div class="balance-card-value">
+            {{ (balanceGeneral.totalPatrimonio || 0) | currency:'PEN':'symbol':'1.0-0' }}
+          </div>
+        </div>
+
+        <div class="balance-card" [class]="getRatioColor(balanceGeneral.resultadoEjercicio, 'liquidez')">
+          <div class="balance-card-header">
+            <mat-icon>assessment</mat-icon>
+            <span>Resultado del Ejercicio</span>
+          </div>
+          <div class="balance-card-value">
+            {{ (balanceGeneral.resultadoEjercicio || 0) | currency:'PEN':'symbol':'1.0-0' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Indicadores Financieros -->
+      <div class="ratios-section">
+        <h3>Indicadores Financieros</h3>
+        <div class="ratios-grid">
+          <div class="ratio-card" [class]="'card-' + getRatioColor(balanceGeneral.ratioLiquidez, 'liquidez')">
+            <div class="ratio-header">
+              <mat-icon>water_drop</mat-icon>
+              <span>Liquidez</span>
+            </div>
+            <div class="ratio-value">
+              {{ balanceGeneral.ratioLiquidez || 'N/D' }}
+            </div>
+            <div class="ratio-label">
+              {{ getRatioLabel(balanceGeneral.ratioLiquidez, 'liquidez') }}
+            </div>
+            <div class="ratio-formula">
+              Activo Corriente / Pasivo Corriente
+            </div>
+          </div>
+
+          <div class="ratio-card" [class]="'card-' + getRatioColor(balanceGeneral.ratioEndeudamiento, 'endeudamiento')">
+            <div class="ratio-header">
+              <mat-icon>trending_down</mat-icon>
+              <span>Endeudamiento</span>
+            </div>
+            <div class="ratio-value">
+              {{ (balanceGeneral.ratioEndeudamiento || 0) | percent:'1.2-2' }}
+            </div>
+            <div class="ratio-label">
+              {{ getRatioLabel(balanceGeneral.ratioEndeudamiento, 'endeudamiento') }}
+            </div>
+            <div class="ratio-formula">
+              Total Pasivo / Total Activo
+            </div>
+          </div>
+
+          <div class="ratio-card" [class]="'card-' + getRatioColor(balanceGeneral.ratioSolvencia, 'solvencia')">
+            <div class="ratio-header">
+              <mat-icon>shield</mat-icon>
+              <span>Solvencia</span>
+            </div>
+            <div class="ratio-value">
+              {{ (balanceGeneral.ratioSolvencia || 0) | percent:'1.2-2' }}
+            </div>
+            <div class="ratio-label">
+              {{ getRatioLabel(balanceGeneral.ratioSolvencia, 'solvencia') }}
+            </div>
+            <div class="ratio-formula">
+              Total Patrimonio / Total Activo
+            </div>
+          </div>
+
+          <div class="ratio-card" [class]="balanceGeneral.capitalTrabajo! >= 0 ? 'card-success' : 'card-error'">
+            <div class="ratio-header">
+              <mat-icon>work</mat-icon>
+              <span>Capital de Trabajo</span>
+            </div>
+            <div class="ratio-value">
+              {{ (balanceGeneral.capitalTrabajo || 0) | currency:'PEN':'symbol':'1.0-0' }}
+            </div>
+            <div class="ratio-label">
+              {{ balanceGeneral.capitalTrabajo! >= 0 ? 'POSITIVO' : 'NEGATIVO' }}
+            </div>
+            <div class="ratio-formula">
+              Activo Corriente - Pasivo Corriente
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detalle por secciones -->
+      <mat-accordion class="balance-accordion">
+        <!-- Activo Corriente -->
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon>trending_up</mat-icon>
+              Activo Corriente
+            </mat-panel-title>
+            <mat-panel-description>
+              {{ (balanceGeneral.totalActivoCorriente || 0) | currency:'PEN':'symbol':'1.0-0' }}
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="partidas-table">
+            <div class="partida-row">
+              <span class="partida-nombre">Efectivo y Equivalentes</span>
+              <span class="partida-monto">{{ (balanceGeneral.efectivoEquivalentes || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Cuentas por Cobrar Comerciales</span>
+              <span class="partida-monto">{{ (balanceGeneral.cuentasCobrarComerciales || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Cuentas por Cobrar Diversas</span>
+              <span class="partida-monto">{{ (balanceGeneral.cuentasCobrarDiversas || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Existencias</span>
+              <span class="partida-monto">{{ (balanceGeneral.existencias || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Gastos Pagados por Anticipado</span>
+              <span class="partida-monto">{{ (balanceGeneral.gastosPagadosAnticipado || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row total-row">
+              <span class="partida-nombre"><strong>TOTAL ACTIVO CORRIENTE</strong></span>
+              <span class="partida-monto"><strong>{{ (balanceGeneral.totalActivoCorriente || 0) | currency:'PEN':'symbol':'1.0-0' }}</strong></span>
+            </div>
+          </div>
+        </mat-expansion-panel>
+
+        <!-- Activo No Corriente -->
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon>home</mat-icon>
+              Activo No Corriente
+            </mat-panel-title>
+            <mat-panel-description>
+              {{ (balanceGeneral.totalActivoNoCorriente || 0) | currency:'PEN':'symbol':'1.0-0' }}
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="partidas-table">
+            <div class="partida-row">
+              <span class="partida-nombre">Inmuebles, Maquinaria y Equipo</span>
+              <span class="partida-monto">{{ (balanceGeneral.inmueblesMaquinariaEquipo || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Depreciación Acumulada</span>
+              <span class="partida-monto">{{ (balanceGeneral.depreciacionAcumulada || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Intangibles</span>
+              <span class="partida-monto">{{ (balanceGeneral.intangibles || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Amortización Acumulada</span>
+              <span class="partida-monto">{{ (balanceGeneral.amortizacionAcumulada || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Activo Diferido</span>
+              <span class="partida-monto">{{ (balanceGeneral.activoDiferido || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row total-row">
+              <span class="partida-nombre"><strong>TOTAL ACTIVO NO CORRIENTE</strong></span>
+              <span class="partida-monto"><strong>{{ (balanceGeneral.totalActivoNoCorriente || 0) | currency:'PEN':'symbol':'1.0-0' }}</strong></span>
+            </div>
+          </div>
+        </mat-expansion-panel>
+
+        <!-- Pasivo Corriente -->
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon>trending_down</mat-icon>
+              Pasivo Corriente
+            </mat-panel-title>
+            <mat-panel-description>
+              {{ (balanceGeneral.totalPasivoCorriente || 0) | currency:'PEN':'symbol':'1.0-0' }}
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="partidas-table">
+            <div class="partida-row">
+              <span class="partida-nombre">Tributos por Pagar</span>
+              <span class="partida-monto">{{ (balanceGeneral.tributosPorPagar || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Remuneraciones por Pagar</span>
+              <span class="partida-monto">{{ (balanceGeneral.remuneracionesPorPagar || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Cuentas por Pagar Comerciales</span>
+              <span class="partida-monto">{{ (balanceGeneral.cuentasPagarComerciales || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Obligaciones Financieras (Corto Plazo)</span>
+              <span class="partida-monto">{{ (balanceGeneral.obligacionesFinancierasCorto || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Otras Cuentas por Pagar</span>
+              <span class="partida-monto">{{ (balanceGeneral.otrasCuentasPorPagar || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row total-row">
+              <span class="partida-nombre"><strong>TOTAL PASIVO CORRIENTE</strong></span>
+              <span class="partida-monto"><strong>{{ (balanceGeneral.totalPasivoCorriente || 0) | currency:'PEN':'symbol':'1.0-0' }}</strong></span>
+            </div>
+          </div>
+        </mat-expansion-panel>
+
+        <!-- Pasivo No Corriente -->
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon>schedule</mat-icon>
+              Pasivo No Corriente
+            </mat-panel-title>
+            <mat-panel-description>
+              {{ (balanceGeneral.totalPasivoNoCorriente || 0) | currency:'PEN':'symbol':'1.0-0' }}
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="partidas-table">
+            <div class="partida-row">
+              <span class="partida-nombre">Obligaciones Financieras (Largo Plazo)</span>
+              <span class="partida-monto">{{ (balanceGeneral.obligacionesFinancierasLargo || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Provisiones</span>
+              <span class="partida-monto">{{ (balanceGeneral.provisiones || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row total-row">
+              <span class="partida-nombre"><strong>TOTAL PASIVO NO CORRIENTE</strong></span>
+              <span class="partida-monto"><strong>{{ (balanceGeneral.totalPasivoNoCorriente || 0) | currency:'PEN':'symbol':'1.0-0' }}</strong></span>
+            </div>
+          </div>
+        </mat-expansion-panel>
+
+        <!-- Patrimonio -->
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon>account_balance</mat-icon>
+              Patrimonio
+            </mat-panel-title>
+            <mat-panel-description>
+              {{ (balanceGeneral.totalPatrimonio || 0) | currency:'PEN':'symbol':'1.0-0' }}
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="partidas-table">
+            <div class="partida-row">
+              <span class="partida-nombre">Capital Social</span>
+              <span class="partida-monto">{{ (balanceGeneral.capitalSocial || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Reserva Legal</span>
+              <span class="partida-monto">{{ (balanceGeneral.reservaLegal || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Resultados Acumulados</span>
+              <span class="partida-monto">{{ (balanceGeneral.resultadosAcumulados || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row">
+              <span class="partida-nombre">Resultado del Ejercicio</span>
+              <span class="partida-monto">{{ (balanceGeneral.resultadoEjercicio || 0) | currency:'PEN':'symbol':'1.0-0' }}</span>
+            </div>
+            <div class="partida-row total-row">
+              <span class="partida-nombre"><strong>TOTAL PATRIMONIO</strong></span>
+              <span class="partida-monto"><strong>{{ (balanceGeneral.totalPatrimonio || 0) | currency:'PEN':'symbol':'1.0-0' }}</strong></span>
+            </div>
+          </div>
+        </mat-expansion-panel>
+
+        <!-- Firmantes -->
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon>edit</mat-icon>
+              Firmantes ({{ balanceGeneral.firmantes.length }})
+            </mat-panel-title>
+            <mat-panel-description>
+              Validados con RENIEC
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="firmantes-table">
+            @for (firmante of balanceGeneral.firmantes; track firmante.dni) {
+              <div class="firmante-row">
+                <div class="firmante-info">
+                  <div class="firmante-nombre">{{ firmante.nombre || 'Sin nombre' }}</div>
+                  <div class="firmante-detalles">
+                    <span>DNI: {{ firmante.dni || 'No disponible' }}</span>
+                    @if (firmante.cargo) {
+                      <span> • Cargo: {{ firmante.cargo }}</span>
+                    }
+                    @if (firmante.matricula) {
+                      <span> • Matrícula: {{ firmante.matricula }}</span>
+                    }
+                  </div>
+                </div>
+                <div class="firmante-validacion">
+                  @if (firmante.dniValidado === true) {
+                    <mat-icon class="validacion-ok">verified</mat-icon>
+                    <span class="validacion-texto ok">Validado</span>
+                  } @else if (firmante.dniValidado === false) {
+                    <mat-icon class="validacion-error">error</mat-icon>
+                    <span class="validacion-texto error">No válido</span>
+                  } @else {
+                    <mat-icon class="validacion-pendiente">help</mat-icon>
+                    <span class="validacion-texto pendiente">Sin validar</span>
+                  }
+                  @if (firmante.mensajeValidacion) {
+                    <span class="validacion-mensaje">{{ firmante.mensajeValidacion }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </mat-expansion-panel>
+
+        <!-- Confianza -->
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>Confianza por campo</mat-panel-title>
+          </mat-expansion-panel-header>
+          <div class="confianza-grid">
+            @for (item of balanceGeneral.confianza | keyvalue; track item.key) {
+              <div class="confianza-item">
+                <div class="confianza-item-header">
+                  <span>{{ item.key }}</span>
+                  <span class="confianza-pct" [class]="getConfianzaColor(item.value)">
+                    {{ item.value | percent:'1.0-0' }}
+                  </span>
+                </div>
+                <mat-progress-bar mode="determinate"
+                                  [value]="item.value * 100"
+                                  [class]="'bar-' + getConfianzaColor(item.value)">
+                </mat-progress-bar>
+              </div>
+            }
+          </div>
+        </mat-expansion-panel>
+      </mat-accordion>
+    </div>
+  }
+
   <!-- Formulario de evaluacion -->
   <mat-card class="form-card">
     <mat-card-header>

@@ -1,0 +1,332 @@
+@if (loading) {
+  <div class="loading-container">
+    <mat-spinner diameter="48"></mat-spinner>
+    <p>Cargando expediente...</p>
+  </div>
+}
+
+@if (error && !expediente) {
+  <mat-card class="error-card">
+    <mat-card-content>
+      <mat-icon>error</mat-icon>
+      <span>{{ error }}</span>
+    </mat-card-content>
+  </mat-card>
+}
+
+<!-- Formulario de creacion -->
+@if (!expediente && !loading) {
+  <div class="crear-section">
+    <mat-card>
+      <mat-card-header>
+        <mat-icon mat-card-avatar>folder_open</mat-icon>
+        <mat-card-title>Nuevo Expediente Crediticio</mat-card-title>
+        <mat-card-subtitle>Ingrese los datos del solicitante para iniciar el proceso</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <form [formGroup]="form" (ngSubmit)="crearExpediente()" class="crear-form">
+          <mat-form-field appearance="outline" class="field-full">
+            <mat-label>DNI del Solicitante</mat-label>
+            <input matInput formControlName="dniSolicitante" maxlength="8" placeholder="12345678">
+            <mat-icon matSuffix>badge</mat-icon>
+            @if (form.get('dniSolicitante')?.hasError('required') && form.get('dniSolicitante')?.touched) {
+              <mat-error>El DNI es obligatorio</mat-error>
+            }
+            @if (form.get('dniSolicitante')?.hasError('pattern')) {
+              <mat-error>El DNI debe tener exactamente 8 digitos</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="field-full">
+            <mat-label>RUC de la Empresa (opcional)</mat-label>
+            <input matInput formControlName="rucEmpresa" maxlength="11" placeholder="20123456789">
+            <mat-icon matSuffix>business</mat-icon>
+            @if (form.get('rucEmpresa')?.hasError('pattern')) {
+              <mat-error>El RUC debe tener exactamente 11 digitos</mat-error>
+            }
+          </mat-form-field>
+
+          <button mat-raised-button color="primary"
+                  type="submit"
+                  [disabled]="form.invalid || creando">
+            @if (creando) {
+              <mat-spinner diameter="20" class="btn-spinner"></mat-spinner>
+              Creando...
+            } @else {
+              <ng-container>
+                <mat-icon>add</mat-icon>
+                Crear Expediente
+              </ng-container>
+            }
+          </button>
+        </form>
+      </mat-card-content>
+    </mat-card>
+  </div>
+}
+
+<!-- Vista del expediente -->
+@if (expediente) {
+  <div class="expediente-container">
+
+    <!-- Header del expediente -->
+    <mat-card class="header-card">
+      <mat-card-content>
+        <div class="header-row">
+          <div class="header-info">
+            <h2>Expediente #{{ expediente.id }}</h2>
+            <div class="header-details">
+              <span class="detail-item">
+                <mat-icon>badge</mat-icon>
+                DNI: {{ expediente.dniSolicitante }}
+              </span>
+              @if (nombreCompleto) {
+                <span class="detail-item">
+                  <mat-icon>person</mat-icon>
+                  {{ nombreCompleto }}
+                </span>
+              }
+              @if (expediente.rucEmpresa) {
+                <span class="detail-item">
+                  <mat-icon>business</mat-icon>
+                  RUC: {{ expediente.rucEmpresa }}
+                </span>
+              }
+              @if (expediente.razonSocialEmpresa) {
+                <span class="detail-item">
+                  <mat-icon>domain</mat-icon>
+                  {{ expediente.razonSocialEmpresa }}
+                </span>
+              }
+            </div>
+          </div>
+          <div class="header-actions">
+            <span class="estado-chip" [class]="getEstadoColor(expediente.estado)">
+              {{ getEstadoLabel(expediente.estado) }}
+            </span>
+            <button mat-stroked-button (click)="nuevoExpediente()">
+              <mat-icon>add</mat-icon>
+              Nuevo
+            </button>
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Barra de progreso -->
+    <mat-card class="progress-card">
+      <mat-card-content>
+        <div class="progress-header">
+          <span>Documentos obligatorios</span>
+          <span class="progress-count">
+            {{ expediente.documentosObligatoriosCompletos }} de {{ expediente.totalDocumentosObligatorios }}
+          </span>
+        </div>
+        <mat-progress-bar
+          mode="determinate"
+          [value]="progreso"
+          [class.complete]="expediente.puedeEvaluar">
+        </mat-progress-bar>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Lista de documentos -->
+    <mat-accordion multi>
+      @for (slot of documentoSlots; track slot.tipo.id) {
+        <mat-expansion-panel [expanded]="!slot.documento">
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              @if (slot.documento) {
+                <mat-icon [class]="getDocEstadoClass(slot.documento.estado)">
+                  {{ getDocEstadoIcon(slot.documento.estado) }}
+                </mat-icon>
+              } @else {
+                <mat-icon class="estado-pendiente">upload_file</mat-icon>
+              }
+              <span>{{ slot.tipo.nombre }}</span>
+              @if (slot.tipo.esObligatorio) {
+                <span class="obligatorio-badge">Obligatorio</span>
+              }
+            </mat-panel-title>
+            <mat-panel-description>
+              @if (slot.documento) {
+                {{ slot.documento.nombreArchivo }}
+                @if (slot.documento.confianzaPromedio !== null) {
+                  - Confianza: {{ slot.documento.confianzaPromedio | percent:'1.0-0' }}
+                }
+              } @else {
+                Sin documento
+              }
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+
+          <div class="slot-content">
+            @if (slot.tipo.descripcion) {
+              <p class="tipo-descripcion">{{ slot.tipo.descripcion }}</p>
+            }
+
+            <!-- Documento ya procesado -->
+            @if (slot.documento && slot.documento.estado === 2) {
+              <div class="doc-resumen">
+                <div class="doc-info">
+                  <mat-icon>description</mat-icon>
+                  <div>
+                    <strong>{{ slot.documento.nombreArchivo }}</strong>
+                    <span class="doc-fecha">Procesado: {{ slot.documento.fechaProcesado | date:'dd/MM/yyyy HH:mm' }}</span>
+                  </div>
+                </div>
+                <div class="doc-actions">
+                  <!-- Zona de reemplazo -->
+                  <div class="upload-zone compact"
+                       [class.drag-over]="slot.dragOver"
+                       (dragover)="onDragOver($event, slot)"
+                       (dragleave)="onDragLeave($event, slot)"
+                       (drop)="onDrop($event, slot)">
+                    <input type="file"
+                           class="file-input-hidden"
+                           accept=".pdf,.jpg,.jpeg,.png,.bmp,.tiff"
+                           (change)="onFileSelected($event, slot)">
+                    <mat-icon>swap_horiz</mat-icon>
+                    <span>Reemplazar</span>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- Documento con error -->
+            @if (slot.documento && slot.documento.estado === 3) {
+              <div class="doc-error-info">
+                <mat-icon>error</mat-icon>
+                <span>Error: {{ slot.documento.errorMensaje || 'Error desconocido' }}</span>
+              </div>
+            }
+
+            <!-- Zona de upload (si no hay documento o hay error) -->
+            @if (!slot.documento || slot.documento.estado === 3) {
+              <div class="upload-zone"
+                   [class.drag-over]="slot.dragOver"
+                   [class.has-error]="slot.error"
+                   (dragover)="onDragOver($event, slot)"
+                   (dragleave)="onDragLeave($event, slot)"
+                   (drop)="onDrop($event, slot)">
+                <input type="file"
+                       class="file-input-hidden"
+                       accept=".pdf,.jpg,.jpeg,.png,.bmp,.tiff"
+                       (change)="onFileSelected($event, slot)">
+                <mat-icon class="upload-icon">cloud_upload</mat-icon>
+                <p>Arrastre un archivo aqui o haga clic para seleccionar</p>
+                <span class="upload-hint">PDF, JPG, PNG, BMP o TIFF - Max 4 MB</span>
+              </div>
+            }
+
+            <!-- Progreso de procesamiento -->
+            @if (slot.loading) {
+              <div class="procesando-info">
+                <mat-spinner diameter="24"></mat-spinner>
+                <div class="progreso-mensajes">
+                  @for (msg of slot.progreso; track $index) {
+                    <span class="progreso-msg">{{ msg }}</span>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- Error de validacion -->
+            @if (slot.error) {
+              <div class="slot-error">
+                <mat-icon>warning</mat-icon>
+                <span>{{ slot.error }}</span>
+              </div>
+            }
+          </div>
+        </mat-expansion-panel>
+      }
+    </mat-accordion>
+
+    <!-- Boton Evaluar -->
+    @if (expediente.estado !== 3) {
+      <div class="evaluar-section">
+        @if (error) {
+          <div class="evaluar-error">
+            <mat-icon>error</mat-icon>
+            <span>{{ error }}</span>
+          </div>
+        }
+        <button mat-raised-button color="primary"
+                class="evaluar-btn"
+                [disabled]="!expediente.puedeEvaluar || evaluando"
+                (click)="evaluar()"
+                [matTooltip]="!expediente.puedeEvaluar ? 'Complete todos los documentos obligatorios para evaluar' : ''">
+          @if (evaluando) {
+            <mat-spinner diameter="20" class="btn-spinner"></mat-spinner>
+            Evaluando...
+          } @else {
+            <ng-container>
+              <mat-icon>gavel</mat-icon>
+              Evaluar Expediente
+            </ng-container>
+          }
+        </button>
+        @if (!expediente.puedeEvaluar) {
+          <p class="evaluar-hint">
+            Faltan {{ expediente.totalDocumentosObligatorios - expediente.documentosObligatoriosCompletos }}
+            documento(s) obligatorio(s) por procesar
+          </p>
+        }
+      </div>
+    }
+
+    <!-- Resultado de Evaluacion -->
+    @if (expediente.resultadoEvaluacion) {
+      <mat-card class="resultado-card" [class]="getRecomendacionClass(expediente.resultadoEvaluacion.recomendacion)">
+        <mat-card-header>
+          <mat-icon mat-card-avatar>assessment</mat-icon>
+          <mat-card-title>Resultado de Evaluacion</mat-card-title>
+          <mat-card-subtitle>
+            Evaluado: {{ expediente.resultadoEvaluacion.fechaEvaluacion | date:'dd/MM/yyyy HH:mm' }}
+          </mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="resultado-header">
+            <div class="resultado-score">
+              <span class="score-valor">{{ expediente.resultadoEvaluacion.scoreFinal | number:'1.1-1' }}</span>
+              <span class="score-label">Score Final</span>
+            </div>
+            <div class="resultado-recomendacion" [class]="getRecomendacionClass(expediente.resultadoEvaluacion.recomendacion)">
+              <span class="rec-text">{{ getRecomendacionLabel(expediente.resultadoEvaluacion.recomendacion) }}</span>
+              <span class="rec-riesgo">Riesgo: {{ getNivelRiesgoLabel(expediente.resultadoEvaluacion.nivelRiesgo) }}</span>
+            </div>
+          </div>
+
+          @if (expediente.resultadoEvaluacion.resumen) {
+            <p class="resultado-resumen">{{ expediente.resultadoEvaluacion.resumen }}</p>
+          }
+
+          <!-- Reglas aplicadas -->
+          @if (expediente.resultadoEvaluacion.reglasAplicadas.length > 0) {
+            <h3>Reglas Aplicadas</h3>
+            <div class="reglas-grid">
+              @for (regla of expediente.resultadoEvaluacion.reglasAplicadas; track $index) {
+                <div class="regla-item" [class]="getReglaResultadoClass(regla.resultadoRegla)">
+                  <div class="regla-header">
+                    <mat-icon>{{ regla.cumplida ? 'check_circle' : 'cancel' }}</mat-icon>
+                    <span class="regla-nombre">{{ regla.nombreRegla }}</span>
+                  </div>
+                  <div class="regla-detalle">
+                    <span>{{ regla.campoEvaluado }} {{ regla.operador }} {{ regla.valorEsperado | number:'1.2-2' }}</span>
+                    @if (regla.valorReal !== null) {
+                      <span class="regla-real">Valor real: {{ regla.valorReal | number:'1.2-2' }}</span>
+                    }
+                  </div>
+                  @if (regla.mensaje) {
+                    <p class="regla-mensaje">{{ regla.mensaje }}</p>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+  </div>
+}

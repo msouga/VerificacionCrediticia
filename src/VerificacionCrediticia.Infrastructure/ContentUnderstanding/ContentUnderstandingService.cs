@@ -88,7 +88,8 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
     public async Task<VigenciaPoderDto> ProcesarVigenciaPoderAsync(
         Stream documentStream,
         string nombreArchivo,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
     {
         _logger.LogInformation("Procesando Vigencia de Poder con Content Understanding: {NombreArchivo}", nombreArchivo);
 
@@ -112,7 +113,7 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         var resultUrl = new Uri(operationLocations.First()).PathAndQuery;
         _logger.LogInformation("Operacion Vigencia de Poder iniciada, polling en: {ResultUrl}", resultUrl);
 
-        var analyzeResult = await PollForResultAsync(resultUrl, cancellationToken);
+        var analyzeResult = await PollForResultAsync(resultUrl, cancellationToken, progreso);
         var dto = MapearResultadoVigenciaPoder(analyzeResult, nombreArchivo);
 
         _logger.LogInformation(
@@ -183,6 +184,202 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         return dto;
     }
 
+    public async Task<BalanceGeneralDto> ProcesarBalanceGeneralAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
+    {
+        _logger.LogInformation("Procesando Balance General con Content Understanding: {NombreArchivo}", nombreArchivo);
+
+        using var memoryStream = new MemoryStream();
+        await documentStream.CopyToAsync(memoryStream, cancellationToken);
+        var bytes = memoryStream.ToArray();
+
+        var analyzeUrl = $"/contentunderstanding/analyzers/{_settings.BalanceGeneralAnalyzerId}:analyzeBinary?api-version={_settings.ApiVersion}";
+
+        using var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        var response = await _httpClient.PostAsync(analyzeUrl, content, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        if (!response.Headers.TryGetValues("Operation-Location", out var operationLocations))
+        {
+            throw new InvalidOperationException("La respuesta no contiene el header Operation-Location");
+        }
+
+        var resultUrl = new Uri(operationLocations.First()).PathAndQuery;
+        _logger.LogInformation("Operacion Balance General iniciada, polling en: {ResultUrl}", resultUrl);
+
+        var analyzeResult = await PollForResultAsync(resultUrl, cancellationToken, progreso);
+        var dto = MapearResultadoBalanceGeneral(analyzeResult, nombreArchivo);
+
+        _logger.LogInformation(
+            "Balance General procesado: RUC {Ruc}, Empresa: {Empresa}, Total Activo: {TotalActivo}, Confianza: {Confianza:P1}",
+            dto.Ruc, dto.RazonSocial, dto.TotalActivo, dto.ConfianzaPromedio);
+
+        return dto;
+    }
+
+    private BalanceGeneralDto MapearResultadoBalanceGeneral(AnalyzeResultResponse analyzeResult, string nombreArchivo)
+    {
+        var dto = new BalanceGeneralDto { ArchivoOrigen = nombreArchivo };
+
+        var contentItem = analyzeResult.Result?.Contents?.FirstOrDefault();
+        if (contentItem?.Fields == null)
+        {
+            _logger.LogWarning("No se encontraron campos en el resultado de Balance General");
+            return dto;
+        }
+
+        var fields = contentItem.Fields;
+
+        // Mapear encabezado
+        dto.Ruc = LimpiarRuc(ObtenerValorString(fields, "Ruc"));
+        dto.RazonSocial = ObtenerValorString(fields, "RazonSocial");
+        dto.Domicilio = ObtenerValorString(fields, "Domicilio");
+        dto.FechaBalance = ObtenerValorString(fields, "FechaBalance") ?? ObtenerValorDate(fields, "FechaBalance");
+        dto.Moneda = ObtenerValorString(fields, "Moneda");
+
+        // Mapear activos corrientes
+        dto.EfectivoEquivalentes = ObtenerValorDecimal(fields, "EfectivoEquivalentes");
+        dto.CuentasCobrarComerciales = ObtenerValorDecimal(fields, "CuentasCobrarComerciales");
+        dto.CuentasCobrarDiversas = ObtenerValorDecimal(fields, "CuentasCobrarDiversas");
+        dto.Existencias = ObtenerValorDecimal(fields, "Existencias");
+        dto.GastosPagadosAnticipado = ObtenerValorDecimal(fields, "GastosPagadosAnticipado");
+        dto.TotalActivoCorriente = ObtenerValorDecimal(fields, "TotalActivoCorriente");
+
+        // Mapear activos no corrientes
+        dto.InmueblesMaquinariaEquipo = ObtenerValorDecimal(fields, "InmueblesMaquinariaEquipo");
+        dto.DepreciacionAcumulada = ObtenerValorDecimal(fields, "DepreciacionAcumulada");
+        dto.Intangibles = ObtenerValorDecimal(fields, "Intangibles");
+        dto.AmortizacionAcumulada = ObtenerValorDecimal(fields, "AmortizacionAcumulada");
+        dto.ActivoDiferido = ObtenerValorDecimal(fields, "ActivoDiferido");
+        dto.TotalActivoNoCorriente = ObtenerValorDecimal(fields, "TotalActivoNoCorriente");
+
+        // Total activo
+        dto.TotalActivo = ObtenerValorDecimal(fields, "TotalActivo");
+
+        // Mapear pasivos corrientes
+        dto.TributosPorPagar = ObtenerValorDecimal(fields, "TributosPorPagar");
+        dto.RemuneracionesPorPagar = ObtenerValorDecimal(fields, "RemuneracionesPorPagar");
+        dto.CuentasPagarComerciales = ObtenerValorDecimal(fields, "CuentasPagarComerciales");
+        dto.ObligacionesFinancierasCorto = ObtenerValorDecimal(fields, "ObligacionesFinancierasCorto");
+        dto.OtrasCuentasPorPagar = ObtenerValorDecimal(fields, "OtrasCuentasPorPagar");
+        dto.TotalPasivoCorriente = ObtenerValorDecimal(fields, "TotalPasivoCorriente");
+
+        // Mapear pasivos no corrientes
+        dto.ObligacionesFinancierasLargo = ObtenerValorDecimal(fields, "ObligacionesFinancierasLargo");
+        dto.Provisiones = ObtenerValorDecimal(fields, "Provisiones");
+        dto.TotalPasivoNoCorriente = ObtenerValorDecimal(fields, "TotalPasivoNoCorriente");
+
+        // Total pasivo
+        dto.TotalPasivo = ObtenerValorDecimal(fields, "TotalPasivo");
+
+        // Mapear patrimonio
+        dto.CapitalSocial = ObtenerValorDecimal(fields, "CapitalSocial");
+        dto.ReservaLegal = ObtenerValorDecimal(fields, "ReservaLegal");
+        dto.ResultadosAcumulados = ObtenerValorDecimal(fields, "ResultadosAcumulados");
+        dto.ResultadoEjercicio = ObtenerValorDecimal(fields, "ResultadoEjercicio");
+        dto.TotalPatrimonio = ObtenerValorDecimal(fields, "TotalPatrimonio");
+
+        // Total pasivo + patrimonio
+        dto.TotalPasivoPatrimonio = ObtenerValorDecimal(fields, "TotalPasivoPatrimonio");
+
+        // Extraer firmantes del array
+        if (fields.TryGetValue("Firmantes", out var firmantesField) && firmantesField.ValueArray != null)
+        {
+            foreach (var item in firmantesField.ValueArray)
+            {
+                if (item.ValueObject == null) continue;
+
+                var firmante = new FirmanteDto
+                {
+                    Nombre = ObtenerValorString(item.ValueObject, "Nombre"),
+                    Dni = LimpiarNumeroDocumentoPeru(ObtenerValorString(item.ValueObject, "Dni")),
+                    Cargo = ObtenerValorString(item.ValueObject, "Cargo"),
+                    Matricula = ObtenerValorString(item.ValueObject, "Matricula")
+                };
+                dto.Firmantes.Add(firmante);
+            }
+        }
+
+        // Registrar confianza por campo (excluir el array)
+        foreach (var (nombre, field) in fields)
+        {
+            if (field.Confidence.HasValue && nombre != "Firmantes")
+            {
+                dto.Confianza[nombre] = field.Confidence.Value;
+            }
+        }
+
+        if (dto.Confianza.Count > 0)
+        {
+            dto.ConfianzaPromedio = dto.Confianza.Values.Average();
+        }
+
+        // Calcular ratios financieros
+        CalcularRatiosFinancieros(dto);
+
+        return dto;
+    }
+
+    private static void CalcularRatiosFinancieros(BalanceGeneralDto balance)
+    {
+        // Ratio de Liquidez = Activo Corriente / Pasivo Corriente
+        if (balance.TotalActivoCorriente > 0 && balance.TotalPasivoCorriente > 0)
+        {
+            balance.RatioLiquidez = Math.Round(
+                balance.TotalActivoCorriente.Value / balance.TotalPasivoCorriente.Value, 2);
+        }
+
+        // Ratio de Endeudamiento = Total Pasivo / Total Activo
+        if (balance.TotalPasivo > 0 && balance.TotalActivo > 0)
+        {
+            balance.RatioEndeudamiento = Math.Round(
+                balance.TotalPasivo.Value / balance.TotalActivo.Value, 2);
+        }
+
+        // Ratio de Solvencia = Total Patrimonio / Total Activo
+        if (balance.TotalPatrimonio > 0 && balance.TotalActivo > 0)
+        {
+            balance.RatioSolvencia = Math.Round(
+                balance.TotalPatrimonio.Value / balance.TotalActivo.Value, 2);
+        }
+
+        // Capital de Trabajo = Activo Corriente - Pasivo Corriente
+        if (balance.TotalActivoCorriente > 0 && balance.TotalPasivoCorriente > 0)
+        {
+            balance.CapitalTrabajo = Math.Round(
+                balance.TotalActivoCorriente.Value - balance.TotalPasivoCorriente.Value, 2);
+        }
+    }
+
+    private static decimal? ObtenerValorDecimal(Dictionary<string, AnalyzeField> fields, string nombre)
+    {
+        if (!fields.TryGetValue(nombre, out var field))
+            return null;
+
+        // Intentar parsear como string
+        if (!string.IsNullOrEmpty(field.ValueString))
+        {
+            // Limpiar formato de numero (quitar comas, simbolos de moneda, etc.)
+            var valorLimpio = field.ValueString
+                .Replace(",", "")
+                .Replace("S/", "")
+                .Replace("$", "")
+                .Replace("(", "-")
+                .Replace(")", "")
+                .Trim();
+
+            if (decimal.TryParse(valorLimpio, out var valor))
+                return valor;
+        }
+
+        return null;
+    }
+
     private static string? LimpiarRuc(string? ruc)
     {
         if (string.IsNullOrEmpty(ruc))
@@ -194,17 +391,38 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
 
     private async Task<AnalyzeResultResponse> PollForResultAsync(
         string resultUrl,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<string>? progreso = null)
     {
         var timeout = TimeSpan.FromMilliseconds(_settings.PollingTimeoutMs);
         var interval = TimeSpan.FromMilliseconds(_settings.PollingIntervalMs);
         var deadline = DateTime.UtcNow + timeout;
+        var inicio = DateTime.UtcNow;
+        var pollCount = 0;
+
+        string[] mensajes =
+        [
+            "Analizando estructura del documento...",
+            "Extrayendo texto con OCR...",
+            "Identificando campos del documento...",
+            "Procesando con inteligencia artificial...",
+            "Validando datos extraidos...",
+            "Finalizando analisis...",
+            "El documento es extenso, esto puede tomar un poco mas...",
+            "Aun procesando, por favor espere...",
+            "Casi listo..."
+        ];
 
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             await Task.Delay(interval, cancellationToken);
+            pollCount++;
+
+            var elapsed = (int)(DateTime.UtcNow - inicio).TotalSeconds;
+            var mensajeIndex = Math.Min(elapsed / 10, mensajes.Length - 1);
+            progreso?.Report($"{mensajes[mensajeIndex]} ({elapsed}s)");
 
             var response = await _httpClient.GetAsync(resultUrl, cancellationToken);
             response.EnsureSuccessStatusCode();
@@ -215,7 +433,7 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
             if (result == null)
                 throw new InvalidOperationException("Respuesta de polling deserializada como null");
 
-            _logger.LogDebug("Polling status: {Status}", result.Status);
+            _logger.LogDebug("Polling status: {Status} ({Elapsed}s, intento {Count})", result.Status, elapsed, pollCount);
 
             if (result.Status.Equals("Succeeded", StringComparison.OrdinalIgnoreCase))
                 return result;
@@ -310,5 +528,101 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
             return soloDigitos[..8];
 
         return soloDigitos;
+    }
+
+    public async Task<EstadoResultadosDto> ProcesarEstadoResultadosAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
+    {
+        _logger.LogInformation("Procesando Estado de Resultados con Content Understanding: {NombreArchivo}", nombreArchivo);
+
+        using var memoryStream = new MemoryStream();
+        await documentStream.CopyToAsync(memoryStream, cancellationToken);
+        var bytes = memoryStream.ToArray();
+
+        var analyzeUrl = $"/contentunderstanding/analyzers/{_settings.EstadoResultadosAnalyzerId}:analyzeBinary?api-version={_settings.ApiVersion}";
+
+        using var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        var response = await _httpClient.PostAsync(analyzeUrl, content, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        if (!response.Headers.TryGetValues("Operation-Location", out var operationLocations))
+        {
+            throw new InvalidOperationException("La respuesta no contiene el header Operation-Location");
+        }
+
+        var resultUrl = new Uri(operationLocations.First()).PathAndQuery;
+        _logger.LogInformation("Operacion Estado de Resultados iniciada, polling en: {ResultUrl}", resultUrl);
+
+        var analyzeResult = await PollForResultAsync(resultUrl, cancellationToken, progreso);
+        var dto = MapearResultadoEstadoResultados(analyzeResult, nombreArchivo);
+
+        _logger.LogInformation(
+            "Estado de Resultados procesado: RUC {Ruc}, Empresa: {Empresa}, Ventas: {Ventas}, Utilidad Neta: {UtilidadNeta}, Confianza: {Confianza:P1}",
+            dto.Ruc, dto.RazonSocial, dto.VentasNetas, dto.UtilidadNeta, dto.ConfianzaPromedio);
+
+        return dto;
+    }
+
+    private EstadoResultadosDto MapearResultadoEstadoResultados(AnalyzeResultResponse analyzeResult, string nombreArchivo)
+    {
+        var dto = new EstadoResultadosDto
+        {
+            FechaProcesado = DateTime.UtcNow
+        };
+
+        var contentItem = analyzeResult.Result?.Contents?.FirstOrDefault();
+        if (contentItem?.Fields == null)
+        {
+            _logger.LogWarning("No se encontraron campos en el resultado de Estado de Resultados");
+            return dto;
+        }
+
+        var fields = contentItem.Fields;
+
+        // Mapear encabezado
+        dto.Ruc = LimpiarRuc(ObtenerValorString(fields, "Ruc"));
+        dto.RazonSocial = ObtenerValorString(fields, "RazonSocial");
+        dto.Periodo = ObtenerValorString(fields, "Periodo");
+        dto.Moneda = ObtenerValorString(fields, "Moneda");
+
+        // Mapear partidas financieras
+        dto.VentasNetas = ObtenerValorDecimal(fields, "VentasNetas");
+        dto.CostoVentas = ObtenerValorDecimal(fields, "CostoVentas");
+        dto.UtilidadBruta = ObtenerValorDecimal(fields, "UtilidadBruta");
+        dto.GastosAdministrativos = ObtenerValorDecimal(fields, "GastosAdministrativos");
+        dto.GastosVentas = ObtenerValorDecimal(fields, "GastosVentas");
+        dto.UtilidadOperativa = ObtenerValorDecimal(fields, "UtilidadOperativa");
+        dto.OtrosIngresos = ObtenerValorDecimal(fields, "OtrosIngresos");
+        dto.OtrosGastos = ObtenerValorDecimal(fields, "OtrosGastos");
+        dto.UtilidadAntesImpuestos = ObtenerValorDecimal(fields, "UtilidadAntesImpuestos");
+        dto.ImpuestoRenta = ObtenerValorDecimal(fields, "ImpuestoRenta");
+        dto.UtilidadNeta = ObtenerValorDecimal(fields, "UtilidadNeta");
+
+        // Calcular ratios
+        dto.CalcularRatios();
+
+        // Validar RUC
+        dto.DatosValidosRuc = !string.IsNullOrEmpty(dto.Ruc) && dto.Ruc.Length == 11;
+
+        // Calcular confianza promedio
+        var confidenceValues = fields
+            .Where(f => f.Value?.Confidence != null)
+            .Select(f => f.Value.Confidence!.Value)
+            .ToList();
+
+        if (confidenceValues.Count > 0)
+        {
+            dto.ConfianzaPromedio = (decimal)confidenceValues.Average();
+        }
+
+        _logger.LogInformation("Estado de Resultados mapeado: {CamposExtraidos} campos, confianza promedio: {Confianza:P1}",
+            fields.Count, dto.ConfianzaPromedio);
+
+        return dto;
     }
 }

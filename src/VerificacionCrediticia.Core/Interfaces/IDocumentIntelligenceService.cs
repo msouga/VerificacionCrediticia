@@ -25,5 +25,24 @@ public interface IDocumentIntelligenceService
     Task<VigenciaPoderDto> ProcesarVigenciaPoderAsync(
         Stream documentStream,
         string nombreArchivo,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null);
+
+    /// <summary>
+    /// Procesa un Balance General y extrae partidas contables y firmantes
+    /// </summary>
+    Task<BalanceGeneralDto> ProcesarBalanceGeneralAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null);
+
+    /// <summary>
+    /// Procesa un Estado de Resultados y extrae partidas financieras
+    /// </summary>
+    Task<EstadoResultadosDto> ProcesarEstadoResultadosAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null);
 }

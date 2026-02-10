@@ -51,7 +51,8 @@ public class DocumentIntelligenceServiceMock : IDocumentIntelligenceService
     public async Task<VigenciaPoderDto> ProcesarVigenciaPoderAsync(
         Stream documentStream,
         string nombreArchivo,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
     {
         await Task.Delay(300, cancellationToken);
 
@@ -64,6 +65,25 @@ public class DocumentIntelligenceServiceMock : IDocumentIntelligenceService
         }
 
         return CrearVigenciaGenerica(nombreArchivo);
+    }
+
+    public async Task<BalanceGeneralDto> ProcesarBalanceGeneralAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
+    {
+        await Task.Delay(400, cancellationToken);
+
+        _logger.LogInformation("[MOCK] Procesando Balance General: {NombreArchivo}", nombreArchivo);
+
+        var nombreLower = nombreArchivo.ToLowerInvariant();
+        if (nombreLower.Contains("techsolutions") || nombreLower.Contains("20659018901"))
+        {
+            return CrearBalanceTechSolutions(nombreArchivo);
+        }
+
+        return CrearBalanceGenerico(nombreArchivo);
     }
 
     private static VigenciaPoderDto CrearVigenciaTechSolutions(string nombreArchivo)
@@ -452,5 +472,328 @@ public class DocumentIntelligenceServiceMock : IDocumentIntelligenceService
             Confianza = confianza,
             ConfianzaPromedio = confianza.Values.Average()
         };
+    }
+
+    private static BalanceGeneralDto CrearBalanceTechSolutions(string nombreArchivo)
+    {
+        var confianza = new Dictionary<string, float>
+        {
+            ["Ruc"] = 0.98f,
+            ["RazonSocial"] = 0.96f,
+            ["FechaBalance"] = 0.94f,
+            ["TotalActivo"] = 0.92f,
+            ["TotalPasivo"] = 0.90f,
+            ["TotalPatrimonio"] = 0.91f,
+            ["ResultadoEjercicio"] = 0.89f,
+            ["EfectivoEquivalentes"] = 0.85f,
+            ["CuentasCobrarComerciales"] = 0.88f,
+            ["Existencias"] = 0.87f
+        };
+
+        var balance = new BalanceGeneralDto
+        {
+            // Encabezado
+            Ruc = "20659018901",
+            RazonSocial = "TECH SOLUTIONS IMPORT SAC",
+            Domicilio = "AV. JAVIER PRADO ESTE 4600 OFC. 1205, SURCO, LIMA",
+            FechaBalance = "31/12/2025",
+            Moneda = "SOLES",
+
+            // Activo Corriente
+            EfectivoEquivalentes = 485_320.50m,
+            CuentasCobrarComerciales = 890_245.75m,
+            CuentasCobrarDiversas = 125_680.20m,
+            Existencias = 1_245_890.35m,
+            GastosPagadosAnticipado = 45_230.80m,
+            TotalActivoCorriente = 2_792_367.60m,
+
+            // Activo No Corriente
+            InmueblesMaquinariaEquipo = 850_000.00m,
+            DepreciacionAcumulada = -285_420.15m,
+            Intangibles = 180_000.00m,
+            AmortizacionAcumulada = -45_000.00m,
+            ActivoDiferido = 74_432.95m,
+            TotalActivoNoCorriente = 774_012.80m,
+
+            // Total Activo
+            TotalActivo = 3_566_380.40m,
+
+            // Pasivo Corriente
+            TributosPorPagar = 185_240.60m,
+            RemuneracionesPorPagar = 125_890.45m,
+            CuentasPagarComerciales = 650_780.25m,
+            ObligacionesFinancierasCorto = 480_000.00m,
+            OtrasCuentasPorPagar = 89_320.15m,
+            TotalPasivoCorriente = 1_531_231.45m,
+
+            // Pasivo No Corriente
+            ObligacionesFinancierasLargo = 1_200_000.00m,
+            Provisiones = 89_838.50m,
+            TotalPasivoNoCorriente = 1_289_838.50m,
+
+            // Total Pasivo
+            TotalPasivo = 2_821_069.95m,
+
+            // Patrimonio
+            CapitalSocial = 500_000.00m,
+            ReservaLegal = 50_000.00m,
+            ResultadosAcumulados = -42_189.55m,
+            ResultadoEjercicio = 237_500.00m,
+            TotalPatrimonio = 745_310.45m,
+
+            // Total Pasivo + Patrimonio
+            TotalPasivoPatrimonio = 3_566_380.40m,
+
+            // Firmantes
+            Firmantes = new List<FirmanteDto>
+            {
+                new()
+                {
+                    Nombre = "AILEEN MEILYN LEI KOO",
+                    Dni = "46590189",
+                    Cargo = "GERENTE GENERAL",
+                    Matricula = null
+                },
+                new()
+                {
+                    Nombre = "MARIA ELENA RODRIGUEZ PAREDES",
+                    Dni = "45678912",
+                    Cargo = "CONTADOR PUBLICO",
+                    Matricula = "CPC 15-4892"
+                }
+            },
+
+            // Metadata
+            Confianza = confianza,
+            ConfianzaPromedio = confianza.Values.Average(),
+            ArchivoOrigen = nombreArchivo
+        };
+
+        // Calcular ratios
+        CalcularRatiosFinancieros(balance);
+
+        return balance;
+    }
+
+    private static BalanceGeneralDto CrearBalanceGenerico(string nombreArchivo)
+    {
+        var confianza = new Dictionary<string, float>
+        {
+            ["Ruc"] = 0.94f,
+            ["RazonSocial"] = 0.92f,
+            ["FechaBalance"] = 0.90f,
+            ["TotalActivo"] = 0.88f,
+            ["TotalPasivo"] = 0.86f,
+            ["TotalPatrimonio"] = 0.87f,
+            ["ResultadoEjercicio"] = 0.85f
+        };
+
+        var balance = new BalanceGeneralDto
+        {
+            // Encabezado
+            Ruc = "20123456789",
+            RazonSocial = "EMPRESA DE PRUEBA SAC",
+            Domicilio = "AV. PRUEBA 123, LIMA",
+            FechaBalance = "31/12/2025",
+            Moneda = "SOLES",
+
+            // Activo Corriente
+            EfectivoEquivalentes = 180_500.00m,
+            CuentasCobrarComerciales = 320_400.00m,
+            CuentasCobrarDiversas = 45_200.00m,
+            Existencias = 450_600.00m,
+            GastosPagadosAnticipado = 15_300.00m,
+            TotalActivoCorriente = 1_012_000.00m,
+
+            // Activo No Corriente
+            InmueblesMaquinariaEquipo = 550_000.00m,
+            DepreciacionAcumulada = -180_000.00m,
+            Intangibles = 80_000.00m,
+            AmortizacionAcumulada = -25_000.00m,
+            ActivoDiferido = 35_000.00m,
+            TotalActivoNoCorriente = 460_000.00m,
+
+            // Total Activo
+            TotalActivo = 1_472_000.00m,
+
+            // Pasivo Corriente
+            TributosPorPagar = 85_400.00m,
+            RemuneracionesPorPagar = 65_800.00m,
+            CuentasPagarComerciales = 280_500.00m,
+            ObligacionesFinancierasCorto = 180_000.00m,
+            OtrasCuentasPorPagar = 38_300.00m,
+            TotalPasivoCorriente = 650_000.00m,
+
+            // Pasivo No Corriente
+            ObligacionesFinancierasLargo = 450_000.00m,
+            Provisiones = 32_000.00m,
+            TotalPasivoNoCorriente = 482_000.00m,
+
+            // Total Pasivo
+            TotalPasivo = 1_132_000.00m,
+
+            // Patrimonio
+            CapitalSocial = 200_000.00m,
+            ReservaLegal = 20_000.00m,
+            ResultadosAcumulados = 75_000.00m,
+            ResultadoEjercicio = 45_000.00m,
+            TotalPatrimonio = 340_000.00m,
+
+            // Total Pasivo + Patrimonio
+            TotalPasivoPatrimonio = 1_472_000.00m,
+
+            // Firmantes
+            Firmantes = new List<FirmanteDto>
+            {
+                new()
+                {
+                    Nombre = "JUAN CARLOS PEREZ GARCIA",
+                    Dni = "12345678",
+                    Cargo = "GERENTE GENERAL",
+                    Matricula = null
+                },
+                new()
+                {
+                    Nombre = "LUCIA FERNANDEZ MARTINEZ",
+                    Dni = "98765432",
+                    Cargo = "CONTADOR PUBLICO",
+                    Matricula = "CPC 12-3456"
+                }
+            },
+
+            // Metadata
+            Confianza = confianza,
+            ConfianzaPromedio = confianza.Values.Average(),
+            ArchivoOrigen = nombreArchivo
+        };
+
+        // Calcular ratios
+        CalcularRatiosFinancieros(balance);
+
+        return balance;
+    }
+
+    private static void CalcularRatiosFinancieros(BalanceGeneralDto balance)
+    {
+        // Ratio de Liquidez = Activo Corriente / Pasivo Corriente
+        if (balance.TotalActivoCorriente > 0 && balance.TotalPasivoCorriente > 0)
+        {
+            balance.RatioLiquidez = Math.Round(
+                balance.TotalActivoCorriente.Value / balance.TotalPasivoCorriente.Value, 2);
+        }
+
+        // Ratio de Endeudamiento = Total Pasivo / Total Activo
+        if (balance.TotalPasivo > 0 && balance.TotalActivo > 0)
+        {
+            balance.RatioEndeudamiento = Math.Round(
+                balance.TotalPasivo.Value / balance.TotalActivo.Value, 2);
+        }
+
+        // Ratio de Solvencia = Total Patrimonio / Total Activo
+        if (balance.TotalPatrimonio > 0 && balance.TotalActivo > 0)
+        {
+            balance.RatioSolvencia = Math.Round(
+                balance.TotalPatrimonio.Value / balance.TotalActivo.Value, 2);
+        }
+
+        // Capital de Trabajo = Activo Corriente - Pasivo Corriente
+        if (balance.TotalActivoCorriente > 0 && balance.TotalPasivoCorriente > 0)
+        {
+            balance.CapitalTrabajo = Math.Round(
+                balance.TotalActivoCorriente.Value - balance.TotalPasivoCorriente.Value, 2);
+        }
+    }
+
+    public async Task<EstadoResultadosDto> ProcesarEstadoResultadosAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
+    {
+        var delay = 2000; // Simular procesamiento
+        var pasos = new[]
+        {
+            "Analizando documento...",
+            "Extrayendo partidas del Estado de Resultados...",
+            "Calculando ratios financieros...",
+            "Validando datos extraídos..."
+        };
+
+        for (int i = 0; i < pasos.Length; i++)
+        {
+            progreso?.Report(pasos[i]);
+            await Task.Delay(delay / pasos.Length, cancellationToken);
+        }
+
+        _logger.LogInformation("[MOCK] Procesando Estado de Resultados: {NombreArchivo}", nombreArchivo);
+
+        var estadoResultados = CrearEstadoResultadosEjemplo(nombreArchivo);
+
+        _logger.LogInformation(
+            "[MOCK] Estado de Resultados procesado: RUC {Ruc}, Ventas: {Ventas:C}, Utilidad Neta: {UtilidadNeta:C}",
+            estadoResultados.Ruc, estadoResultados.VentasNetas, estadoResultados.UtilidadNeta);
+
+        return estadoResultados;
+    }
+
+    private EstadoResultadosDto CrearEstadoResultadosEjemplo(string nombreArchivo)
+    {
+        // Si el archivo contiene "TechSolutions" o el RUC de TechSolutions, usar datos específicos
+        var esTechSolutions = nombreArchivo.Contains("TechSolutions", StringComparison.OrdinalIgnoreCase) ||
+                             nombreArchivo.Contains("20659018901");
+
+        if (esTechSolutions)
+        {
+            var estado = new EstadoResultadosDto
+            {
+                Ruc = "20659018901",
+                RazonSocial = "TECH SOLUTIONS IMPORT SAC",
+                Periodo = "2023",
+                Moneda = "Soles",
+                VentasNetas = 5200000m,  // 5.2M en ventas
+                CostoVentas = 3120000m,  // 60% de costo de ventas
+                UtilidadBruta = 2080000m, // 40% margen bruto
+                GastosAdministrativos = 520000m, // 10% gastos admin
+                GastosVentas = 416000m,  // 8% gastos ventas
+                UtilidadOperativa = 1144000m, // ~22% margen operativo
+                OtrosIngresos = 52000m,
+                OtrosGastos = 26000m,
+                UtilidadAntesImpuestos = 1170000m,
+                ImpuestoRenta = 249750m, // ~21.4% tasa efectiva
+                UtilidadNeta = 920250m,  // ~17.7% margen neto
+                ConfianzaPromedio = 0.87m,
+                DatosValidosRuc = true,
+                FechaProcesado = DateTime.UtcNow
+            };
+
+            estado.CalcularRatios();
+            return estado;
+        }
+
+        // Caso genérico
+        var estadoGenerico = new EstadoResultadosDto
+        {
+            Ruc = "20123456789",
+            RazonSocial = "EMPRESA EJEMPLO SAC",
+            Periodo = "2023",
+            Moneda = "Soles",
+            VentasNetas = 1500000m,
+            CostoVentas = 900000m,
+            UtilidadBruta = 600000m,
+            GastosAdministrativos = 180000m,
+            GastosVentas = 120000m,
+            UtilidadOperativa = 300000m,
+            OtrosIngresos = 15000m,
+            OtrosGastos = 10000m,
+            UtilidadAntesImpuestos = 305000m,
+            ImpuestoRenta = 64050m,
+            UtilidadNeta = 240950m,
+            ConfianzaPromedio = 0.82m,
+            DatosValidosRuc = true,
+            FechaProcesado = DateTime.UtcNow
+        };
+
+        estadoGenerico.CalcularRatios();
+        return estadoGenerico;
     }
 }

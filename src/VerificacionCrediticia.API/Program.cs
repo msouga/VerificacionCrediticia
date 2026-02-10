@@ -1,5 +1,6 @@
 using Serilog;
 using VerificacionCrediticia.API.Extensions;
+using VerificacionCrediticia.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,5 +57,24 @@ app.UseSerilogRequestLogging();
 app.UseCors("AllowDashboard");
 app.UseAuthorization();
 app.MapControllers();
+
+// Seed database en desarrollo
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<DatabaseSeeder>>();
+    var seeder = new DatabaseSeeder(context, logger);
+
+    try
+    {
+        await seeder.SeedAsync();
+    }
+    catch (Exception ex)
+    {
+        var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        log.LogError(ex, "Error durante el seeding de la base de datos");
+    }
+}
 
 app.Run();

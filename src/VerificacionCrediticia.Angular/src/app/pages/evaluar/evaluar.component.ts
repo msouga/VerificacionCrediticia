@@ -11,12 +11,13 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatChipsModule } from '@angular/material/chips';
-import { DecimalPipe, PercentPipe, KeyValuePipe } from '@angular/common';
+import { DecimalPipe, PercentPipe, KeyValuePipe, CurrencyPipe } from '@angular/common';
 import { VerificacionApiService } from '../../services/verificacion-api.service';
 import { LoggingService } from '../../services/logging.service';
 import { ResultadoEvaluacion } from '../../models/resultado-evaluacion.model';
 import { DocumentoIdentidad } from '../../models/documento-identidad.model';
 import { VigenciaPoder } from '../../models/vigencia-poder.model';
+import { BalanceGeneral } from '../../models/balance-general.model';
 import { Recomendacion, Severidad } from '../../models/enums';
 import { GrafoRedComponent } from '../../components/grafo-red/grafo-red.component';
 
@@ -27,7 +28,7 @@ import { GrafoRedComponent } from '../../components/grafo-red/grafo-red.componen
     ReactiveFormsModule, MatCardModule, MatFormFieldModule, MatInputModule,
     MatSelectModule, MatCheckboxModule, MatButtonModule, MatIconModule,
     MatProgressSpinnerModule, MatProgressBarModule, MatExpansionModule,
-    MatChipsModule, DecimalPipe, PercentPipe, KeyValuePipe, GrafoRedComponent
+    MatChipsModule, DecimalPipe, PercentPipe, KeyValuePipe, CurrencyPipe, GrafoRedComponent
   ],
   templateUrl: './evaluar.component.html',
   styleUrl: './evaluar.component.scss'
@@ -52,6 +53,14 @@ export class EvaluarComponent {
   vigenciaError: string | null = null;
   dragOverVigencia = false;
   vigenciaProgreso: string[] = [];
+
+  // Balance General upload
+  archivoBalance: File | null = null;
+  loadingBalance = false;
+  balanceGeneral: BalanceGeneral | null = null;
+  balanceError: string | null = null;
+  dragOverBalance = false;
+  balanceProgreso: string[] = [];
 
   private extensionesPermitidas = ['.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff'];
   private tamanoMaximoMb = 4;
@@ -257,6 +266,142 @@ export class EvaluarComponent {
     this.archivoVigencia = null;
     this.vigenciaPoder = null;
     this.vigenciaError = null;
+  }
+
+  // Balance General drag & drop
+  onDragOverBalance(event: DragEvent): void {
+    event.preventDefault();
+    this.dragOverBalance = true;
+  }
+
+  onDragLeaveBalance(event: DragEvent): void {
+    event.preventDefault();
+    this.dragOverBalance = false;
+  }
+
+  onDropBalance(event: DragEvent): void {
+    event.preventDefault();
+    this.dragOverBalance = false;
+
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      this.procesarArchivoBalance(files[0]);
+    }
+  }
+
+  onFileSelectedBalance(event: any): void {
+    const file = event.target.files?.[0];
+    if (file) {
+      this.procesarArchivoBalance(file);
+    }
+  }
+
+  private procesarArchivoBalance(file: File): void {
+    const extension = this.obtenerExtension(file.name);
+    if (!this.extensionesPermitidas.includes(extension)) {
+      this.balanceError = `Formato no soportado. Formatos permitidos: ${this.extensionesPermitidas.join(', ')}`;
+      return;
+    }
+
+    if (file.size > this.tamanoMaximoMb * 1024 * 1024) {
+      this.balanceError = `El archivo es muy grande. Tamaño máximo: ${this.tamanoMaximoMb} MB`;
+      return;
+    }
+
+    this.archivoBalance = file;
+    this.procesarBalance();
+  }
+
+  async procesarBalance(): Promise<void> {
+    if (!this.archivoBalance) return;
+
+    this.loadingBalance = true;
+    this.balanceError = null;
+    this.balanceProgreso = [];
+
+    try {
+      const res = await this.api.procesarBalanceGeneral(this.archivoBalance, (mensaje: string) => {
+        this.balanceProgreso.push(mensaje);
+      });
+
+      this.balanceGeneral = res;
+      this.loadingBalance = false;
+
+      this.log.info('Balance General procesado', 'EvaluarComponent', {
+        ruc: res.ruc,
+        empresa: res.razonSocial || '',
+        totalActivo: res.totalActivo,
+        confianza: res.confianzaPromedio
+      });
+
+      // Auto-llenar RUC si fue validado
+      if (res.rucValidado === true && res.ruc) {
+        this.form.patchValue({ rucEmpresa: res.ruc });
+      }
+    } catch (err: any) {
+      this.balanceError = err.message || 'Error al procesar el documento';
+      this.loadingBalance = false;
+      this.log.error('Error al procesar Balance General', 'EvaluarComponent', { error: this.balanceError }, err);
+    }
+  }
+
+  limpiarBalance(): void {
+    this.archivoBalance = null;
+    this.balanceGeneral = null;
+    this.balanceError = null;
+  }
+
+  // Helper para obtener colores de ratios
+  getRatioColor(ratio: number | undefined, tipo: 'liquidez' | 'endeudamiento' | 'solvencia'): string {
+    if (!ratio) return 'default';
+
+    if (tipo === 'liquidez') {
+      if (ratio >= 1.5) return 'success';
+      if (ratio >= 1.0) return 'warning';
+      return 'error';
+    }
+
+    if (tipo === 'endeudamiento') {
+      if (ratio <= 0.4) return 'success';
+      if (ratio <= 0.7) return 'warning';
+      return 'error';
+    }
+
+    if (tipo === 'solvencia') {
+      if (ratio >= 0.6) return 'success';
+      if (ratio >= 0.3) return 'warning';
+      return 'error';
+    }
+
+    return 'default';
+  }
+
+  getRatioLabel(ratio: number | undefined, tipo: 'liquidez' | 'endeudamiento' | 'solvencia'): string {
+    if (!ratio) return 'N/D';
+
+    if (tipo === 'liquidez') {
+      if (ratio >= 1.5) return 'BUENO';
+      if (ratio >= 1.0) return 'REGULAR';
+      return 'MALO';
+    }
+
+    if (tipo === 'endeudamiento') {
+      if (ratio <= 0.4) return 'BAJO';
+      if (ratio <= 0.7) return 'MEDIO';
+      return 'ALTO';
+    }
+
+    if (tipo === 'solvencia') {
+      if (ratio >= 0.6) return 'ALTA';
+      if (ratio >= 0.3) return 'MEDIA';
+      return 'BAJA';
+    }
+
+    return 'N/D';
+  }
+
+  private obtenerExtension(nombreArchivo: string): string {
+    return '.' + nombreArchivo.split('.').pop()?.toLowerCase();
   }
 
   // Evaluacion
