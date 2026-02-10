@@ -1,12 +1,15 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatDialog } from '@angular/material/dialog';
 import { DatePipe, DecimalPipe } from '@angular/common';
+import { VerificacionApiService } from '../../services/verificacion-api.service';
+import { NuevoExpedienteDialogComponent } from '../expedientes/nuevo-expediente-dialog.component';
 
 interface EvaluacionReciente {
   nombre: string;
@@ -43,6 +46,28 @@ interface TendenciaDia {
 })
 export class HomeComponent {
   today = new Date();
+
+  constructor(
+    private dialog: MatDialog,
+    private api: VerificacionApiService,
+    private router: Router
+  ) {}
+
+  nuevoExpediente(): void {
+    const dialogRef = this.dialog.open(NuevoExpedienteDialogComponent, {
+      width: '400px'
+    });
+
+    dialogRef.afterClosed().subscribe((descripcion: string | undefined) => {
+      if (descripcion) {
+        this.api.crearExpediente({ descripcion }).subscribe({
+          next: (exp) => {
+            this.router.navigate(['/expediente', exp.id]);
+          }
+        });
+      }
+    });
+  }
 
   stats = {
     evaluacionesHoy: 47,
