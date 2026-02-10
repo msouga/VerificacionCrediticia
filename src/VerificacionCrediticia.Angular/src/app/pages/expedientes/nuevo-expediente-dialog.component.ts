@@ -11,7 +11,7 @@ import { FormsModule } from '@angular/forms';
   imports: [MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, FormsModule],
   template: `
     <h2 mat-dialog-title>Nuevo Expediente</h2>
-    <mat-dialog-content>
+    <mat-dialog-content style="overflow: visible; padding-top: 8px;">
       <mat-form-field appearance="outline" style="width: 100%">
         <mat-label>Descripcion</mat-label>
         <input matInput [(ngModel)]="descripcion" maxlength="40"
