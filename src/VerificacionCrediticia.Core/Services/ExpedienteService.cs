@@ -445,6 +445,7 @@ public class ExpedienteService : IExpedienteService
             "VIGENCIA_PODER" => await _documentIntelligence.ProcesarVigenciaPoderAsync(documentStream, fileName, cancellationToken, progreso),
             "BALANCE_GENERAL" => await _documentIntelligence.ProcesarBalanceGeneralAsync(documentStream, fileName, cancellationToken, progreso),
             "ESTADO_RESULTADOS" => await _documentIntelligence.ProcesarEstadoResultadosAsync(documentStream, fileName, cancellationToken, progreso),
+            "FICHA_RUC" => await _documentIntelligence.ProcesarFichaRucAsync(documentStream, fileName, cancellationToken, progreso),
             _ => throw new NotSupportedException($"Tipo de documento '{codigoTipo}' no tiene procesamiento implementado")
         };
     }
@@ -504,6 +505,20 @@ public class ExpedienteService : IExpedienteService
             }
         }
 
+        if (codigoTipo == "FICHA_RUC" && resultado is FichaRucDto fichaRuc)
+        {
+            if (string.IsNullOrEmpty(expediente.RucEmpresa) && !string.IsNullOrEmpty(fichaRuc.Ruc))
+            {
+                expediente.RucEmpresa = fichaRuc.Ruc;
+                actualizado = true;
+            }
+            if (string.IsNullOrEmpty(expediente.RazonSocialEmpresa) && !string.IsNullOrEmpty(fichaRuc.RazonSocial))
+            {
+                expediente.RazonSocialEmpresa = fichaRuc.RazonSocial;
+                actualizado = true;
+            }
+        }
+
         if (actualizado)
         {
             await _expedienteRepo.UpdateAsync(expediente);
@@ -518,6 +533,7 @@ public class ExpedienteService : IExpedienteService
             VigenciaPoderDto vp => (decimal)vp.ConfianzaPromedio,
             BalanceGeneralDto bg => (decimal)bg.ConfianzaPromedio,
             EstadoResultadosDto er => er.ConfianzaPromedio,
+            FichaRucDto fr => (decimal)fr.ConfianzaPromedio,
             _ => null
         };
     }

@@ -86,7 +86,7 @@ public class DatabaseSeeder
             {
                 Nombre = "Ficha RUC",
                 Codigo = "FICHA_RUC",
-                AnalyzerId = null,
+                AnalyzerId = "fichaRuc",
                 EsObligatorio = false,
                 Orden = 5,
                 Descripcion = "Ficha RUC de la empresa",

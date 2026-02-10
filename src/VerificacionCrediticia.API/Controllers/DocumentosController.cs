@@ -433,6 +433,96 @@ public class DocumentosController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Procesa una Ficha RUC de SUNAT con progreso via Server-Sent Events
+    /// </summary>
+    [HttpPost("ficha-ruc")]
+    public async Task ProcesarFichaRuc(
+        IFormFile archivo,
+        CancellationToken cancellationToken)
+    {
+        if (!await ValidarArchivoSseAsync(archivo, cancellationToken)) return;
+
+        // Iniciar SSE
+        Response.Headers.Append("Content-Type", "text/event-stream");
+        Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("Connection", "keep-alive");
+
+        _logger.LogInformation(
+            "Recibido Ficha RUC (SSE): {NombreArchivo}, Tamano: {Tamano} bytes",
+            archivo.FileName, archivo.Length);
+
+        try
+        {
+            await EnviarEvento("progress", "Enviando Ficha RUC a Azure Content Understanding...", cancellationToken);
+
+            var progreso = new Progress<string>(async mensaje =>
+            {
+                try { await EnviarEvento("progress", mensaje, cancellationToken); }
+                catch { /* SSE ya cerrado */ }
+            });
+
+            using var stream = archivo.OpenReadStream();
+            var resultado = await _documentIntelligenceService.ProcesarFichaRucAsync(
+                stream,
+                archivo.FileName,
+                cancellationToken,
+                progreso);
+
+            var empresa = resultado.RazonSocial ?? "el contribuyente";
+            await EnviarEvento("progress",
+                $"Ficha procesada: {empresa} (RUC: {resultado.Ruc ?? "N/A"})", cancellationToken);
+
+            // Validar RUC contra Equifax
+            if (!string.IsNullOrEmpty(resultado.Ruc))
+            {
+                await EnviarEvento("progress",
+                    $"Validando RUC {resultado.Ruc} contra Equifax...", cancellationToken);
+
+                try
+                {
+                    var reporte = await _equifaxApiClient.ConsultarReporteCrediticioAsync(
+                        "RUC", resultado.Ruc, cancellationToken);
+
+                    await EnviarEvento("progress",
+                        reporte != null
+                            ? $"RUC {resultado.Ruc} verificado en Equifax"
+                            : $"RUC {resultado.Ruc} no encontrado en Equifax",
+                        cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "No se pudo validar RUC {Ruc} contra Equifax", resultado.Ruc);
+                    await EnviarEvento("progress",
+                        $"RUC {resultado.Ruc}: no se pudo verificar en Equifax", cancellationToken);
+                }
+            }
+
+            // Enviar resultado final
+            await EnviarEvento("progress", "Ficha RUC procesada completamente", cancellationToken);
+            var json = JsonSerializer.Serialize(resultado, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+            await EnviarEvento("result", json, cancellationToken);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Error en Content Understanding: {Mensaje}", ex.Message);
+            await EnviarEvento("error", "El servicio de procesamiento de documentos no pudo analizar el archivo", cancellationToken);
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogError(ex, "Timeout en Content Understanding: {Mensaje}", ex.Message);
+            await EnviarEvento("error", "El servicio de procesamiento de documentos no respondio a tiempo", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error inesperado procesando Ficha RUC");
+            await EnviarEvento("error", "Error inesperado al procesar el documento", cancellationToken);
+        }
+    }
+
     private static bool VerificarCoherenciaRatios(EstadoResultadosDto estado)
     {
         // Verificar que los ratios estén dentro de rangos lógicos

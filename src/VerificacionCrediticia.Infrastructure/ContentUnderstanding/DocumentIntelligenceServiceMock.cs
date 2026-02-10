@@ -704,6 +704,104 @@ public class DocumentIntelligenceServiceMock : IDocumentIntelligenceService
         }
     }
 
+    public async Task<FichaRucDto> ProcesarFichaRucAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
+    {
+        await Task.Delay(150, cancellationToken);
+        progreso?.Report("Analizando Ficha RUC...");
+        await Task.Delay(150, cancellationToken);
+        progreso?.Report("Extrayendo datos del contribuyente...");
+
+        _logger.LogInformation("[MOCK] Procesando Ficha RUC: {NombreArchivo}", nombreArchivo);
+
+        var nombreLower = nombreArchivo.ToLowerInvariant();
+        if (nombreLower.Contains("techsolutions") || nombreLower.Contains("20659018901"))
+        {
+            return CrearFichaRucTechSolutions(nombreArchivo);
+        }
+
+        return CrearFichaRucGenerica(nombreArchivo);
+    }
+
+    private static FichaRucDto CrearFichaRucTechSolutions(string nombreArchivo)
+    {
+        var confianza = new Dictionary<string, float>
+        {
+            ["Ruc"] = 0.98f,
+            ["RazonSocial"] = 0.96f,
+            ["NombreComercial"] = 0.90f,
+            ["TipoContribuyente"] = 0.94f,
+            ["FechaInscripcion"] = 0.92f,
+            ["FechaInicioActividades"] = 0.91f,
+            ["EstadoContribuyente"] = 0.97f,
+            ["CondicionDomicilio"] = 0.96f,
+            ["DomicilioFiscal"] = 0.88f,
+            ["ActividadEconomica"] = 0.93f,
+            ["SistemaContabilidad"] = 0.89f,
+            ["ComprobantesAutorizados"] = 0.87f
+        };
+
+        return new FichaRucDto
+        {
+            Ruc = "20659018901",
+            RazonSocial = "TECH SOLUTIONS IMPORT SAC",
+            NombreComercial = "TECH SOLUTIONS",
+            TipoContribuyente = "SOCIEDAD ANONIMA CERRADA",
+            FechaInscripcion = "20/03/2018",
+            FechaInicioActividades = "01/04/2018",
+            EstadoContribuyente = "ACTIVO",
+            CondicionDomicilio = "HABIDO",
+            DomicilioFiscal = "AV. JAVIER PRADO ESTE 4600 OFC. 1205, SANTIAGO DE SURCO, LIMA, LIMA",
+            ActividadEconomica = "4651 - VENTA AL POR MAYOR DE COMPUTADORAS Y EQUIPO PERIFERICO",
+            SistemaContabilidad = "COMPUTARIZADO",
+            ComprobantesAutorizados = "FACTURA, BOLETA DE VENTA, NOTA DE CREDITO, NOTA DE DEBITO, GUIA DE REMISION",
+            Confianza = confianza,
+            ConfianzaPromedio = confianza.Values.Average(),
+            ArchivoOrigen = nombreArchivo
+        };
+    }
+
+    private static FichaRucDto CrearFichaRucGenerica(string nombreArchivo)
+    {
+        var confianza = new Dictionary<string, float>
+        {
+            ["Ruc"] = 0.94f,
+            ["RazonSocial"] = 0.92f,
+            ["NombreComercial"] = 0.88f,
+            ["TipoContribuyente"] = 0.90f,
+            ["FechaInscripcion"] = 0.88f,
+            ["FechaInicioActividades"] = 0.87f,
+            ["EstadoContribuyente"] = 0.93f,
+            ["CondicionDomicilio"] = 0.92f,
+            ["DomicilioFiscal"] = 0.85f,
+            ["ActividadEconomica"] = 0.89f,
+            ["SistemaContabilidad"] = 0.86f,
+            ["ComprobantesAutorizados"] = 0.84f
+        };
+
+        return new FichaRucDto
+        {
+            Ruc = "20123456789",
+            RazonSocial = "EMPRESA DE PRUEBA SAC",
+            NombreComercial = "EMPRESA PRUEBA",
+            TipoContribuyente = "SOCIEDAD ANONIMA CERRADA",
+            FechaInscripcion = "15/01/2015",
+            FechaInicioActividades = "01/02/2015",
+            EstadoContribuyente = "ACTIVO",
+            CondicionDomicilio = "HABIDO",
+            DomicilioFiscal = "AV. PRUEBA 123, LIMA, LIMA, LIMA",
+            ActividadEconomica = "4690 - VENTA AL POR MAYOR NO ESPECIALIZADA",
+            SistemaContabilidad = "MANUAL",
+            ComprobantesAutorizados = "FACTURA, BOLETA DE VENTA",
+            Confianza = confianza,
+            ConfianzaPromedio = confianza.Values.Average(),
+            ArchivoOrigen = nombreArchivo
+        };
+    }
+
     public async Task<EstadoResultadosDto> ProcesarEstadoResultadosAsync(
         Stream documentStream,
         string nombreArchivo,

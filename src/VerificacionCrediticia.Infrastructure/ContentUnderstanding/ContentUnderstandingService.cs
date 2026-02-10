@@ -530,6 +530,88 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         return soloDigitos;
     }
 
+    public async Task<FichaRucDto> ProcesarFichaRucAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
+    {
+        _logger.LogInformation("Procesando Ficha RUC con Content Understanding: {NombreArchivo}", nombreArchivo);
+
+        using var memoryStream = new MemoryStream();
+        await documentStream.CopyToAsync(memoryStream, cancellationToken);
+        var bytes = memoryStream.ToArray();
+
+        var analyzeUrl = $"/contentunderstanding/analyzers/{_settings.FichaRucAnalyzerId}:analyzeBinary?api-version={_settings.ApiVersion}";
+
+        using var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        var response = await _httpClient.PostAsync(analyzeUrl, content, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        if (!response.Headers.TryGetValues("Operation-Location", out var operationLocations))
+        {
+            throw new InvalidOperationException("La respuesta no contiene el header Operation-Location");
+        }
+
+        var resultUrl = new Uri(operationLocations.First()).PathAndQuery;
+        _logger.LogInformation("Operacion Ficha RUC iniciada, polling en: {ResultUrl}", resultUrl);
+
+        var analyzeResult = await PollForResultAsync(resultUrl, cancellationToken, progreso);
+        var dto = MapearResultadoFichaRuc(analyzeResult, nombreArchivo);
+
+        _logger.LogInformation(
+            "Ficha RUC procesada: RUC {Ruc}, Empresa: {Empresa}, Estado: {Estado}, Confianza: {Confianza:P1}",
+            dto.Ruc, dto.RazonSocial, dto.EstadoContribuyente, dto.ConfianzaPromedio);
+
+        return dto;
+    }
+
+    private FichaRucDto MapearResultadoFichaRuc(AnalyzeResultResponse analyzeResult, string nombreArchivo)
+    {
+        var dto = new FichaRucDto { ArchivoOrigen = nombreArchivo };
+
+        var contentItem = analyzeResult.Result?.Contents?.FirstOrDefault();
+        if (contentItem?.Fields == null)
+        {
+            _logger.LogWarning("No se encontraron campos en el resultado de Ficha RUC");
+            return dto;
+        }
+
+        var fields = contentItem.Fields;
+
+        dto.Ruc = LimpiarRuc(ObtenerValorString(fields, "Ruc"));
+        dto.RazonSocial = ObtenerValorString(fields, "RazonSocial");
+        dto.NombreComercial = ObtenerValorString(fields, "NombreComercial");
+        dto.TipoContribuyente = ObtenerValorString(fields, "TipoContribuyente");
+        dto.FechaInscripcion = ObtenerValorString(fields, "FechaInscripcion")
+                                ?? ObtenerValorDate(fields, "FechaInscripcion");
+        dto.FechaInicioActividades = ObtenerValorString(fields, "FechaInicioActividades")
+                                      ?? ObtenerValorDate(fields, "FechaInicioActividades");
+        dto.EstadoContribuyente = ObtenerValorString(fields, "EstadoContribuyente");
+        dto.CondicionDomicilio = ObtenerValorString(fields, "CondicionDomicilio");
+        dto.DomicilioFiscal = ObtenerValorString(fields, "DomicilioFiscal");
+        dto.ActividadEconomica = ObtenerValorString(fields, "ActividadEconomica");
+        dto.SistemaContabilidad = ObtenerValorString(fields, "SistemaContabilidad");
+        dto.ComprobantesAutorizados = ObtenerValorString(fields, "ComprobantesAutorizados");
+
+        foreach (var (nombre, field) in fields)
+        {
+            if (field.Confidence.HasValue)
+            {
+                dto.Confianza[nombre] = field.Confidence.Value;
+            }
+        }
+
+        if (dto.Confianza.Count > 0)
+        {
+            dto.ConfianzaPromedio = dto.Confianza.Values.Average();
+        }
+
+        return dto;
+    }
+
     public async Task<EstadoResultadosDto> ProcesarEstadoResultadosAsync(
         Stream documentStream,
         string nombreArchivo,

@@ -45,4 +45,13 @@ public interface IDocumentIntelligenceService
         string nombreArchivo,
         CancellationToken cancellationToken = default,
         IProgress<string>? progreso = null);
+
+    /// <summary>
+    /// Procesa una Ficha RUC de SUNAT y extrae datos del contribuyente
+    /// </summary>
+    Task<FichaRucDto> ProcesarFichaRucAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null);
 }
