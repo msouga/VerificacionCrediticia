@@ -6,6 +6,7 @@ public interface IExpedienteRepository
 {
     Task<Expediente?> GetByIdAsync(int id);
     Task<Expediente?> GetByIdWithDocumentosAsync(int id);
+    Task<Expediente?> GetByIdWithDocumentosTrackingAsync(int id);
     Task<Expediente?> GetByDniAsync(string dni);
     Task<Expediente> CreateAsync(Expediente expediente);
     Task UpdateAsync(Expediente expediente);

@@ -30,6 +30,15 @@ public class ExpedienteRepository : IExpedienteRepository
             .FirstOrDefaultAsync(e => e.Id == id);
     }
 
+    public async Task<Expediente?> GetByIdWithDocumentosTrackingAsync(int id)
+    {
+        return await _context.Expedientes
+            .Include(e => e.Documentos)
+                .ThenInclude(d => d.TipoDocumento)
+            .Include(e => e.ResultadoEvaluacion)
+            .FirstOrDefaultAsync(e => e.Id == id);
+    }
+
     public async Task<Expediente?> GetByDniAsync(string dni)
     {
         return await _context.Expedientes
@@ -46,7 +55,11 @@ public class ExpedienteRepository : IExpedienteRepository
 
     public async Task UpdateAsync(Expediente expediente)
     {
-        _context.Entry(expediente).State = EntityState.Modified;
+        var entry = _context.Entry(expediente);
+        if (entry.State == EntityState.Detached)
+        {
+            _context.Update(expediente);
+        }
         await _context.SaveChangesAsync();
     }
 

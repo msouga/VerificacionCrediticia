@@ -209,7 +209,8 @@ public class ExpedienteService : IExpedienteService
         IProgress<ProgresoEvaluacionDto>? progreso = null,
         CancellationToken cancellationToken = default)
     {
-        var expediente = await _expedienteRepo.GetByIdWithDocumentosAsync(expedienteId)
+        // Usar tracking para poder persistir cambios (documentos + resultado evaluacion)
+        var expediente = await _expedienteRepo.GetByIdWithDocumentosTrackingAsync(expedienteId)
             ?? throw new KeyNotFoundException($"Expediente {expedienteId} no encontrado");
 
         // Obtener documentos pendientes de procesamiento (Subido)
@@ -299,10 +300,9 @@ public class ExpedienteService : IExpedienteService
                 $"Error procesando {errores.Count} documento(s): {string.Join("; ", errores)}");
         }
 
-        // Verificar que todos los obligatorios esten procesados
-        expediente = await _expedienteRepo.GetByIdWithDocumentosAsync(expedienteId)!;
+        // Verificar que todos los obligatorios esten procesados (ya tenemos el expediente trackeado)
         var tiposObligatorios = await _tipoDocumentoRepo.GetObligatoriosAsync();
-        var docsProcesados = expediente!.Documentos
+        var docsProcesados = expediente.Documentos
             .Where(d => d.Estado == EstadoDocumento.Procesado)
             .Select(d => d.TipoDocumentoId)
             .ToHashSet();
@@ -351,7 +351,6 @@ public class ExpedienteService : IExpedienteService
         }
         else
         {
-            expediente.Documentos.Clear();
             expediente.ResultadoEvaluacion = resultadoPersistido;
         }
 

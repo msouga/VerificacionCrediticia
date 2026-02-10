@@ -251,19 +251,42 @@ public class ExpedientesController : ControllerBase
         Response.Headers.Append("Cache-Control", "no-cache");
         Response.Headers.Append("Connection", "keep-alive");
 
+        var sseGate = new SemaphoreSlim(1, 1);
+
         try
         {
             var progreso = new Progress<ProgresoEvaluacionDto>(async dto =>
             {
-                var json = JsonSerializer.Serialize(dto, _jsonOptions);
-                await EnviarEvento("progress", json, cancellationToken);
+                try
+                {
+                    await sseGate.WaitAsync(cancellationToken);
+                    try
+                    {
+                        var json = JsonSerializer.Serialize(dto, _jsonOptions);
+                        await EnviarEvento("progress", json, cancellationToken);
+                    }
+                    finally
+                    {
+                        sseGate.Release();
+                    }
+                }
+                catch (OperationCanceledException) { }
+                catch (ObjectDisposedException) { }
             });
 
             var resultado = await _expedienteService.EvaluarExpedienteAsync(
                 id, progreso, cancellationToken);
 
-            var resultadoJson = JsonSerializer.Serialize(resultado, _jsonOptions);
-            await EnviarEvento("result", resultadoJson, cancellationToken);
+            await sseGate.WaitAsync(cancellationToken);
+            try
+            {
+                var resultadoJson = JsonSerializer.Serialize(resultado, _jsonOptions);
+                await EnviarEvento("result", resultadoJson, cancellationToken);
+            }
+            finally
+            {
+                sseGate.Release();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -272,17 +295,17 @@ public class ExpedientesController : ControllerBase
         catch (KeyNotFoundException ex)
         {
             _logger.LogWarning(ex, "Recurso no encontrado: {Mensaje}", ex.Message);
-            await EnviarEvento("error", ex.Message, cancellationToken);
+            await EnviarEventoSeguro("error", ex.Message);
         }
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning(ex, "Error de operacion: {Mensaje}", ex.Message);
-            await EnviarEvento("error", ex.Message, cancellationToken);
+            await EnviarEventoSeguro("error", ex.Message);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error evaluando expediente {Id}", id);
-            await EnviarEvento("error", "Error inesperado al evaluar el expediente", cancellationToken);
+            await EnviarEventoSeguro("error", "Error inesperado al evaluar el expediente");
         }
     }
 
@@ -299,6 +322,17 @@ public class ExpedientesController : ControllerBase
         var mensaje = $"event: {eventType}\ndata: {data}\n\n";
         await Response.WriteAsync(mensaje, ct);
         await Response.Body.FlushAsync(ct);
+    }
+
+    private async Task EnviarEventoSeguro(string eventType, string data)
+    {
+        try
+        {
+            var mensaje = $"event: {eventType}\ndata: {data}\n\n";
+            await Response.WriteAsync(mensaje);
+            await Response.Body.FlushAsync();
+        }
+        catch { }
     }
 
     private static string? ValidarArchivo(IFormFile? archivo)

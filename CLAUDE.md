@@ -1,9 +1,10 @@
 # VerificacionCrediticia - Instrucciones de Proyecto
 
 ## Arquitectura
-- **Backend**: .NET 8 Web API con clean architecture (Core, Infrastructure, API)
+- **Backend**: .NET 9 Web API con clean architecture (Core, Infrastructure, API)
 - **Frontend**: Angular 19 con Angular Material y Cytoscape.js
-- **Base de datos**: Pendiente (actualmente usa mock de Equifax)
+- **Base de datos**: Azure SQL (EF Core 9), migraciones en Infrastructure
+- **Storage**: Azure Blob Storage (`stvercreddev`, container `documentos`)
 - **Puerto API**: 5100
 - **Puerto Angular**: 4200
 
@@ -12,7 +13,7 @@
 src/
   VerificacionCrediticia.API/          # Controllers, Program.cs, DI
   VerificacionCrediticia.Core/         # Entities, DTOs, Enums, Services, Interfaces
-  VerificacionCrediticia.Infrastructure/ # Equifax, ContentUnderstanding, Reniec (real + mock)
+  VerificacionCrediticia.Infrastructure/ # Equifax, ContentUnderstanding, Reniec, Storage, Persistence
   VerificacionCrediticia.Angular/      # Frontend Angular 19
 tests/
   VerificacionCrediticia.UnitTests/
@@ -35,15 +36,35 @@ tests/
 ## Azure Content Understanding
 - Recurso: `cu-vercred-dev` (AIServices, S0) en **westus**, RG: `rg-vercred-cu-dev`
 - Endpoint: `https://westus.api.cognitive.microsoft.com/`
-- API version: `2025-05-01-preview`
+- API version: `2025-11-01` (GA)
 - Modelos: `gpt-41-mini` (gpt-4.1-mini), `text-embedding-3-large`
-- Analyzers: `dniperuano` (DNI peruano), `vigenciaPoderes` (Vigencia de Poder)
+- Analyzers: `dniperuano`, `vigenciaPoderes`, `balanceGeneral`, `estadoResultados`
 - Config mock/real: `ContentUnderstanding.UseMock` en `appsettings.Development.json`
 
-## Endpoints de documentos
+## Endpoints de documentos (individuales, sin expediente)
 - `POST /api/documentos/dni` - Procesa DNI (multipart/form-data, respuesta JSON)
 - `POST /api/documentos/vigencia-poder` - Procesa Vigencia de Poder (multipart/form-data, respuesta SSE)
-  - Eventos SSE: `progress` (texto), `result` (JSON VigenciaPoderDto), `error` (texto)
+- `POST /api/documentos/balance-general` - Procesa Balance General (multipart/form-data, respuesta SSE)
+- `POST /api/documentos/estado-resultados` - Procesa Estado de Resultados (multipart/form-data, respuesta SSE)
+  - Eventos SSE: `progress` (texto), `result` (JSON), `error` (texto)
+
+## Endpoints de expedientes
+- `POST /api/expedientes` - Crear expediente
+- `GET /api/expedientes?pagina=1&tamanoPagina=10` - Listar paginado
+- `GET /api/expedientes/{id}` - Detalle con documentos y resultado
+- `PUT /api/expedientes/{id}` - Actualizar descripcion
+- `DELETE /api/expedientes` - Eliminar multiples (body: [ids])
+- `POST /api/expedientes/{id}/documentos/{codigoTipo}` - Subir documento a blob (JSON, sin procesamiento)
+- `PUT /api/expedientes/{id}/documentos/{docId}` - Reemplazar documento (JSON)
+- `POST /api/expedientes/{id}/evaluar` - Evaluar: procesa todos con Content Understanding + reglas (SSE)
+- `GET /api/expedientes/tipos-documento` - Lista tipos de documento
+
+## Flujo de expedientes
+1. **Subir documentos**: POST va a Azure Blob Storage, estado = Subido (4), respuesta JSON instantanea
+2. **Evaluar**: POST SSE descarga cada doc del blob, lo procesa con Content Understanding, aplica reglas crediticias
+   - Eventos SSE: `progress` (JSON ProgresoEvaluacionDto), `result` (JSON ExpedienteDto), `error` (texto)
+   - Soporta cancelacion via CancellationToken/AbortController
+   - Retry automatico (1 intento) si falla un documento
 
 ## Datos de prueba (Mock Evaluacion)
 | DNI | RUC | Descripcion |
@@ -67,6 +88,7 @@ tests/
 - `DNI_Aileen.pdf`, `DNI_Pablo.pdf`, `DNI_Paola.pdf`
 - `Vigencia_Poder_TechSolutions.pdf`
 - `Balance_General_TechSolutions.pdf`
+- `Estado_Resultados_TechSolutions.pdf`
 
 ## Skills obligatorios
 Antes de escribir o modificar codigo, SIEMPRE consultar los skills relevantes:
