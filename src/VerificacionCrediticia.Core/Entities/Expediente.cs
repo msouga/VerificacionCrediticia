@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using VerificacionCrediticia.Core.Enums;
 
 namespace VerificacionCrediticia.Core.Entities;
@@ -7,23 +6,16 @@ public class Expediente
 {
     public int Id { get; set; }
 
-    [Required]
-    [MaxLength(40)]
     public string Descripcion { get; set; } = string.Empty;
 
-    [MaxLength(8)]
     public string? DniSolicitante { get; set; }
 
-    [MaxLength(100)]
     public string? NombresSolicitante { get; set; }
 
-    [MaxLength(100)]
     public string? ApellidosSolicitante { get; set; }
 
-    [MaxLength(11)]
     public string? RucEmpresa { get; set; }
 
-    [MaxLength(200)]
     public string? RazonSocialEmpresa { get; set; }
 
     public EstadoExpediente Estado { get; set; } = EstadoExpediente.Iniciado;

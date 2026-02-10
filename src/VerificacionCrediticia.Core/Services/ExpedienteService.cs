@@ -94,7 +94,7 @@ public class ExpedienteService : IExpedienteService
 
     public async Task<ExpedienteDto> ActualizarExpedienteAsync(int id, ActualizarExpedienteRequest request)
     {
-        var expediente = await _expedienteRepo.GetByIdAsync(id)
+        var expediente = await _expedienteRepo.GetByIdTrackingAsync(id)
             ?? throw new KeyNotFoundException($"Expediente {id} no encontrado");
 
         expediente.Descripcion = request.Descripcion;

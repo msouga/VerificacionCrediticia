@@ -99,43 +99,7 @@ public class DocumentosController : ControllerBase
         IFormFile archivo,
         CancellationToken cancellationToken)
     {
-        // Validar archivo antes de iniciar stream
-        if (archivo == null || archivo.Length == 0)
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
-            {
-                Title = "Archivo requerido",
-                Detail = "Debe enviar un archivo PDF o imagen",
-                Status = 400
-            }, cancellationToken);
-            return;
-        }
-
-        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-        if (!_extensionesPermitidas.Contains(extension))
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
-            {
-                Title = "Formato no soportado",
-                Detail = $"Formatos permitidos: {string.Join(", ", _extensionesPermitidas)}",
-                Status = 400
-            }, cancellationToken);
-            return;
-        }
-
-        if (archivo.Length > _tamanoMaximoBytes)
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
-            {
-                Title = "Archivo muy grande",
-                Detail = $"El tamano maximo permitido es {_tamanoMaximoBytes / (1024 * 1024)} MB",
-                Status = 400
-            }, cancellationToken);
-            return;
-        }
+        if (!await ValidarArchivoSseAsync(archivo, cancellationToken)) return;
 
         // Iniciar SSE
         Response.Headers.Append("Content-Type", "text/event-stream");
@@ -249,43 +213,7 @@ public class DocumentosController : ControllerBase
         IFormFile archivo,
         CancellationToken cancellationToken)
     {
-        // Validar archivo antes de iniciar stream
-        if (archivo == null || archivo.Length == 0)
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
-            {
-                Title = "Archivo requerido",
-                Detail = "Debe enviar un archivo PDF o imagen",
-                Status = 400
-            }, cancellationToken);
-            return;
-        }
-
-        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-        if (!_extensionesPermitidas.Contains(extension))
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
-            {
-                Title = "Formato no soportado",
-                Detail = $"Formatos permitidos: {string.Join(", ", _extensionesPermitidas)}",
-                Status = 400
-            }, cancellationToken);
-            return;
-        }
-
-        if (archivo.Length > _tamanoMaximoBytes)
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
-            {
-                Title = "Archivo muy grande",
-                Detail = $"El tamano maximo permitido es {_tamanoMaximoBytes / (1024 * 1024)} MB",
-                Status = 400
-            }, cancellationToken);
-            return;
-        }
+        if (!await ValidarArchivoSseAsync(archivo, cancellationToken)) return;
 
         // Iniciar SSE
         Response.Headers.Append("Content-Type", "text/event-stream");
@@ -411,43 +339,7 @@ public class DocumentosController : ControllerBase
         IFormFile archivo,
         CancellationToken cancellationToken)
     {
-        // Validar archivo antes de iniciar stream
-        if (archivo == null || archivo.Length == 0)
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
-            {
-                Title = "Archivo requerido",
-                Detail = "Debe enviar un archivo PDF o imagen",
-                Status = 400
-            }, cancellationToken);
-            return;
-        }
-
-        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-        if (!_extensionesPermitidas.Contains(extension))
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
-            {
-                Title = "Formato no soportado",
-                Detail = $"Formatos permitidos: {string.Join(", ", _extensionesPermitidas)}",
-                Status = 400
-            }, cancellationToken);
-            return;
-        }
-
-        if (archivo.Length > _tamanoMaximoBytes)
-        {
-            Response.StatusCode = 400;
-            await Response.WriteAsJsonAsync(new ProblemDetails
-            {
-                Title = "Archivo muy grande",
-                Detail = $"El tamano maximo permitido es {_tamanoMaximoBytes / (1024 * 1024)} MB",
-                Status = 400
-            }, cancellationToken);
-            return;
-        }
+        if (!await ValidarArchivoSseAsync(archivo, cancellationToken)) return;
 
         // Iniciar SSE
         Response.Headers.Append("Content-Type", "text/event-stream");
@@ -613,5 +505,37 @@ public class DocumentosController : ControllerBase
         }
 
         return null;
+    }
+
+    private async Task<bool> ValidarArchivoSseAsync(IFormFile? archivo, CancellationToken cancellationToken)
+    {
+        string? error = null;
+
+        if (archivo == null || archivo.Length == 0)
+            error = "Debe enviar un archivo PDF o imagen";
+        else
+        {
+            var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
+            if (!_extensionesPermitidas.Contains(extension))
+                error = $"Formatos permitidos: {string.Join(", ", _extensionesPermitidas)}";
+            else if (archivo.Length > _tamanoMaximoBytes)
+                error = $"El tamano maximo permitido es {_tamanoMaximoBytes / (1024 * 1024)} MB";
+        }
+
+        if (error != null)
+        {
+            Response.StatusCode = 400;
+            await Response.WriteAsJsonAsync(new ProblemDetails
+            {
+                Title = error.Contains("Formatos") ? "Formato no soportado"
+                      : error.Contains("maximo") ? "Archivo muy grande"
+                      : "Archivo requerido",
+                Detail = error,
+                Status = 400
+            }, cancellationToken);
+            return false;
+        }
+
+        return true;
     }
 }

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -15,7 +15,8 @@ import { MatButtonModule } from '@angular/material/button';
     MatIconModule, MatButtonModule
   ],
   templateUrl: './main-layout.component.html',
-  styleUrl: './main-layout.component.scss'
+  styleUrl: './main-layout.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MainLayoutComponent {
   sidenavOpened = true;

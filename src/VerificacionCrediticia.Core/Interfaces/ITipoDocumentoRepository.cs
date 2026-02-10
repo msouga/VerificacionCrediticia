@@ -4,13 +4,13 @@ namespace VerificacionCrediticia.Core.Interfaces;
 
 public interface ITipoDocumentoRepository
 {
-    Task<TipoDocumento?> GetByIdAsync(int id);
-    Task<TipoDocumento?> GetByCodigoAsync(string codigo);
-    Task<List<TipoDocumento>> GetActivosAsync();
-    Task<List<TipoDocumento>> GetObligatoriosAsync();
-    Task<List<TipoDocumento>> GetAllAsync();
-    Task<TipoDocumento> CreateAsync(TipoDocumento tipoDocumento);
-    Task UpdateAsync(TipoDocumento tipoDocumento);
-    Task DeleteAsync(int id);
-    Task<bool> ExistsAsync(int id);
+    Task<TipoDocumento?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+    Task<TipoDocumento?> GetByCodigoAsync(string codigo, CancellationToken cancellationToken = default);
+    Task<List<TipoDocumento>> GetActivosAsync(CancellationToken cancellationToken = default);
+    Task<List<TipoDocumento>> GetObligatoriosAsync(CancellationToken cancellationToken = default);
+    Task<List<TipoDocumento>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<TipoDocumento> CreateAsync(TipoDocumento tipoDocumento, CancellationToken cancellationToken = default);
+    Task UpdateAsync(TipoDocumento tipoDocumento, CancellationToken cancellationToken = default);
+    Task DeleteAsync(int id, CancellationToken cancellationToken = default);
+    Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default);
 }

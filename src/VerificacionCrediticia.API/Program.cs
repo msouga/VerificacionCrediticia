@@ -26,11 +26,13 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddApplicationServices(builder.Configuration);
 
 // CORS para el Dashboard
+var corsOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>()
+    ?? ["http://localhost:4200"];
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowDashboard", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(corsOrigins)
               .AllowAnyMethod()
               .AllowAnyHeader();
     });

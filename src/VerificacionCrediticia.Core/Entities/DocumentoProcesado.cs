@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using VerificacionCrediticia.Core.Enums;
 
 namespace VerificacionCrediticia.Core.Entities;
@@ -11,8 +10,6 @@ public class DocumentoProcesado
 
     public int TipoDocumentoId { get; set; }
 
-    [Required]
-    [MaxLength(255)]
     public string NombreArchivo { get; set; } = string.Empty;
 
     public DateTime FechaProcesado { get; set; } = DateTime.UtcNow;
@@ -23,13 +20,11 @@ public class DocumentoProcesado
 
     public decimal? ConfianzaPromedio { get; set; }
 
-    [MaxLength(1000)]
     public string? ErrorMensaje { get; set; }
 
-    [MaxLength(500)]
     public string? BlobUri { get; set; }
 
-    // Navegación
+    // Navegacion
     public virtual Expediente Expediente { get; set; } = null!;
     public virtual TipoDocumento TipoDocumento { get; set; } = null!;
 }

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,7 +17,8 @@ import { DocumentoIdentidad } from '../../models/documento-identidad.model';
     DecimalPipe, PercentPipe, KeyValuePipe
   ],
   templateUrl: './documentos.component.html',
-  styleUrl: './documentos.component.scss'
+  styleUrl: './documentos.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class DocumentosComponent {
   archivoSeleccionado: File | null = null;
@@ -29,7 +30,7 @@ export class DocumentosComponent {
   private extensionesPermitidas = ['.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff'];
   private tamanoMaximoMb = 4;
 
-  constructor(private api: VerificacionApiService) {}
+  constructor(private api: VerificacionApiService, private cdr: ChangeDetectorRef) {}
 
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -85,10 +86,12 @@ export class DocumentosComponent {
       next: (res) => {
         this.resultado = res;
         this.loading = false;
+        this.cdr.markForCheck();
       },
       error: (err) => {
         this.error = err.error?.detail || err.error?.message || err.message || 'Error al procesar el documento';
         this.loading = false;
+        this.cdr.markForCheck();
       }
     });
   }

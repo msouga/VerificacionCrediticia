@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -31,7 +31,8 @@ import { GrafoRedComponent } from '../../components/grafo-red/grafo-red.componen
     MatChipsModule, DecimalPipe, PercentPipe, KeyValuePipe, CurrencyPipe, GrafoRedComponent
   ],
   templateUrl: './evaluar.component.html',
-  styleUrl: './evaluar.component.scss'
+  styleUrl: './evaluar.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class EvaluarComponent {
   form: FormGroup;
@@ -74,7 +75,8 @@ export class EvaluarComponent {
   constructor(
     private fb: FormBuilder,
     private api: VerificacionApiService,
-    private log: LoggingService
+    private log: LoggingService,
+    private cdr: ChangeDetectorRef
   ) {
     this.form = this.fb.group({
       dniSolicitante: ['', [Validators.required, Validators.pattern(/^\d{8}$/)]],
@@ -146,11 +148,13 @@ export class EvaluarComponent {
         if (res.dniValidado === true && res.numeroDocumento) {
           this.form.patchValue({ dniSolicitante: res.numeroDocumento });
         }
+        this.cdr.markForCheck();
       },
       error: (err) => {
         this.dniError = err.error?.detail || err.error?.message || err.message || 'Error al procesar el documento';
         this.loadingDni = false;
         this.log.error('Error al procesar DNI', 'EvaluarComponent', { error: this.dniError }, err);
+        this.cdr.markForCheck();
       }
     });
   }
@@ -245,6 +249,7 @@ export class EvaluarComponent {
 
       this.vigenciaPoder = res;
       this.loadingVigencia = false;
+      this.cdr.markForCheck();
       this.log.info('Vigencia de Poder procesada', 'EvaluarComponent', {
         ruc: res.ruc || '',
         empresa: res.razonSocial || '',
@@ -255,10 +260,12 @@ export class EvaluarComponent {
       if (res.rucValidado === true && res.ruc) {
         this.form.patchValue({ rucEmpresa: res.ruc });
       }
-    } catch (err: any) {
-      this.vigenciaError = err.message || 'Error al procesar el documento';
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      this.vigenciaError = error.message || 'Error al procesar el documento';
       this.loadingVigencia = false;
-      this.log.error('Error al procesar Vigencia de Poder', 'EvaluarComponent', { error: this.vigenciaError }, err);
+      this.cdr.markForCheck();
+      this.log.error('Error al procesar Vigencia de Poder', 'EvaluarComponent', { error: this.vigenciaError }, err as Error);
     }
   }
 
@@ -289,8 +296,9 @@ export class EvaluarComponent {
     }
   }
 
-  onFileSelectedBalance(event: any): void {
-    const file = event.target.files?.[0];
+  onFileSelectedBalance(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (file) {
       this.procesarArchivoBalance(file);
     }
@@ -326,6 +334,7 @@ export class EvaluarComponent {
 
       this.balanceGeneral = res;
       this.loadingBalance = false;
+      this.cdr.markForCheck();
 
       this.log.info('Balance General procesado', 'EvaluarComponent', {
         ruc: res.ruc,
@@ -338,10 +347,12 @@ export class EvaluarComponent {
       if (res.rucValidado === true && res.ruc) {
         this.form.patchValue({ rucEmpresa: res.ruc });
       }
-    } catch (err: any) {
-      this.balanceError = err.message || 'Error al procesar el documento';
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      this.balanceError = error.message || 'Error al procesar el documento';
       this.loadingBalance = false;
-      this.log.error('Error al procesar Balance General', 'EvaluarComponent', { error: this.balanceError }, err);
+      this.log.error('Error al procesar Balance General', 'EvaluarComponent', { error: this.balanceError }, err as Error);
+      this.cdr.markForCheck();
     }
   }
 
@@ -422,30 +433,32 @@ export class EvaluarComponent {
           score: res.scoreFinal,
           recomendacion: res.recomendacion
         });
+        this.cdr.markForCheck();
       },
       error: (err) => {
         this.error = err.error?.message || err.message || 'Error al evaluar';
         this.loading = false;
         this.log.error('Error en evaluacion', 'EvaluarComponent', { error: this.error }, err);
+        this.cdr.markForCheck();
       }
     });
   }
 
   getHeaderClass(): string {
     if (!this.resultado) return '';
-    const r = this.resultado.recomendacion;
-    if (r === Recomendacion.Aprobar || r === 0 as any) return 'header-success';
-    if (r === Recomendacion.RevisarManualmente || r === 1 as any) return 'header-warning';
-    if (r === Recomendacion.Rechazar || r === 2 as any) return 'header-error';
+    const r = this.resultado.recomendacion as Recomendacion | number;
+    if (r === Recomendacion.Aprobar || r === 0) return 'header-success';
+    if (r === Recomendacion.RevisarManualmente || r === 1) return 'header-warning';
+    if (r === Recomendacion.Rechazar || r === 2) return 'header-error';
     return '';
   }
 
   getRecomendacionText(): string {
     if (!this.resultado) return '';
-    const r = this.resultado.recomendacion;
-    if (r === Recomendacion.Aprobar || r === 0 as any) return 'APROBAR';
-    if (r === Recomendacion.RevisarManualmente || r === 1 as any) return 'REVISAR MANUALMENTE';
-    if (r === Recomendacion.Rechazar || r === 2 as any) return 'RECHAZAR';
+    const r = this.resultado.recomendacion as Recomendacion | number;
+    if (r === Recomendacion.Aprobar || r === 0) return 'APROBAR';
+    if (r === Recomendacion.RevisarManualmente || r === 1) return 'REVISAR MANUALMENTE';
+    if (r === Recomendacion.Rechazar || r === 2) return 'RECHAZAR';
     return '';
   }
 
@@ -461,7 +474,7 @@ export class EvaluarComponent {
     return 'CRITICO';
   }
 
-  getSeveridadColor(severidad: any): string {
+  getSeveridadColor(severidad: Severidad | number | string): string {
     if (severidad === Severidad.Critica || severidad === 3) return 'error';
     if (severidad === Severidad.Alta || severidad === 2) return 'warning';
     if (severidad === Severidad.Media || severidad === 1) return 'info';

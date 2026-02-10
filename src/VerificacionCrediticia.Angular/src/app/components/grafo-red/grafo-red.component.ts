@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges, ElementRef, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, ElementRef, ViewChild, AfterViewInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
@@ -12,7 +12,8 @@ import cytoscape from 'cytoscape';
   standalone: true,
   imports: [CommonModule, MatCardModule, MatIconModule, MatChipsModule],
   templateUrl: './grafo-red.component.html',
-  styleUrls: ['./grafo-red.component.scss']
+  styleUrls: ['./grafo-red.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class GrafoRedComponent implements OnChanges, AfterViewInit {
   @Input() grafo?: { [key: string]: NodoRed };
@@ -176,11 +177,11 @@ export class GrafoRedComponent implements OnChanges, AfterViewInit {
   }
 
   // El backend puede enviar enums como numeros (0,1,2...) o como strings
-  private esEmpresaTipo(tipo: any): boolean {
+  private esEmpresaTipo(tipo: TipoNodo | number | string): boolean {
     return tipo === TipoNodo.Empresa || tipo === 1 || tipo === 'Empresa';
   }
 
-  private getColorNodo(estado: any): string {
+  private getColorNodo(estado: EstadoCrediticio | number | string): string {
     const s = typeof estado === 'number' ? estado : estado?.toString();
     if (s === EstadoCrediticio.Normal || s === 0) return '#4caf50';
     if (s === EstadoCrediticio.ConProblemasPotenciales || s === 1) return '#ff9800';
@@ -211,15 +212,15 @@ export class GrafoRedComponent implements OnChanges, AfterViewInit {
     1: 'Empresa', 'Empresa': 'Empresa',
   };
 
-  getEstadoLabel(estado: any): string {
+  getEstadoLabel(estado: EstadoCrediticio | number | string): string {
     return GrafoRedComponent.estadoLabels[estado] ?? String(estado);
   }
 
-  getTipoLabel(tipo: any): string {
+  getTipoLabel(tipo: TipoNodo | number | string): string {
     return GrafoRedComponent.tipoLabels[tipo] ?? String(tipo);
   }
 
-  getEstadoColor(estado: any): string {
+  getEstadoColor(estado: EstadoCrediticio | number | string): string {
     const s = typeof estado === 'number' ? estado : estado?.toString();
     if (s === EstadoCrediticio.Normal || s === 0) return 'primary';
     if (s === EstadoCrediticio.ConProblemasPotenciales || s === 1) return 'accent';

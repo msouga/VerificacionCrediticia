@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using VerificacionCrediticia.Core.Enums;
 
 namespace VerificacionCrediticia.Core.Entities;
@@ -7,15 +6,10 @@ public class ReglaEvaluacion
 {
     public int Id { get; set; }
 
-    [Required]
-    [MaxLength(100)]
     public string Nombre { get; set; } = string.Empty;
 
-    [MaxLength(500)]
     public string? Descripcion { get; set; }
 
-    [Required]
-    [MaxLength(100)]
     public string Campo { get; set; } = string.Empty;
 
     public OperadorComparacion Operador { get; set; }

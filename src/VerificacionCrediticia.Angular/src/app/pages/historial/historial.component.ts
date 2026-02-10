@@ -1,4 +1,5 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, DestroyRef, inject, ChangeDetectionStrategy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -46,9 +47,11 @@ interface EvaluacionHistorial {
     MatDialogModule, DecimalPipe, DatePipe
   ],
   templateUrl: './historial.component.html',
-  styleUrl: './historial.component.scss'
+  styleUrl: './historial.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class HistorialComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   searchControl = new FormControl('');
   resultadoFilter = new FormControl('');
   fechaDesde = new FormControl<Date | null>(null);
@@ -81,7 +84,10 @@ export class HistorialComponent implements OnInit {
   ngOnInit(): void {
     this.generateMockData();
 
-    this.searchControl.valueChanges.pipe(debounceTime(300)).subscribe(() => {
+    this.searchControl.valueChanges.pipe(
+      debounceTime(300),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => {
       this.applyFilters();
     });
   }
