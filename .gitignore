@@ -64,3 +64,6 @@ appsettings.*.json
 !appsettings.json
 !appsettings.Development.json.example
 *.env
+
+# Test samples (datos personales)
+tests/samples/

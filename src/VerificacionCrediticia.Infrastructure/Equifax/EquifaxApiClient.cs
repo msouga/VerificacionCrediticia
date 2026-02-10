@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VerificacionCrediticia.Core.DTOs;
 using VerificacionCrediticia.Core.Entities;
@@ -18,18 +19,21 @@ public class EquifaxApiClient : IEquifaxApiClient
     private readonly IEquifaxAuthService _authService;
     private readonly EquifaxSettings _settings;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<EquifaxApiClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public EquifaxApiClient(
         HttpClient httpClient,
         IEquifaxAuthService authService,
         IOptions<EquifaxSettings> settings,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        ILogger<EquifaxApiClient> logger)
     {
         _httpClient = httpClient;
         _authService = authService;
         _settings = settings.Value;
         _cache = cache;
+        _logger = logger;
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -77,19 +81,24 @@ public class EquifaxApiClient : IEquifaxApiClient
             }
         };
 
+        var jsonBody = JsonSerializer.Serialize(requestBody, _jsonOptions);
         var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
-            Content = new StringContent(
-                JsonSerializer.Serialize(requestBody, _jsonOptions),
-                Encoding.UTF8,
-                "application/json")
+            Content = new StringContent(jsonBody, Encoding.UTF8)
         };
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         var response = await _httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError(
+                "Equifax respondio con {StatusCode}: {ErrorBody}",
+                (int)response.StatusCode,
+                errorBody);
             return null;
         }
 
@@ -121,27 +130,41 @@ public class EquifaxApiClient : IEquifaxApiClient
 
         var modulos = response.Applicants!.PrimaryConsumer!.InterconnectResponse!;
 
+        // Verificar si el modulo 100 (Resumen) tiene error (documento no encontrado)
+        var moduloResumen = modulos.FirstOrDefault(m => m.Codigo == 100);
+        if (moduloResumen?.TieneError == true)
+        {
+            return reporte;
+        }
+
         foreach (var modulo in modulos)
         {
+            if (modulo.TieneError)
+                continue;
+
             if (modulo.Data == null || !modulo.Data.Flag)
                 continue;
 
             switch (modulo.Codigo)
             {
-                case "602": // Directorio de Personas
+                case 602: // Directorio de Personas
                     MapearDirectorioPersona(reporte, modulo.Data);
                     break;
 
-                case "877" or "878": // Directorio SUNAT
+                case 877 or 878: // Directorio SUNAT
                     MapearDirectorioSunat(reporte, modulo.Data);
                     break;
 
-                case "855" or "856": // Representantes Legales
+                case 855 or 856: // Representantes Legales
                     MapearRepresentantesLegales(reporte, modulo.Data);
                     break;
 
-                case "875" or "876": // Empresas Relacionadas
+                case 875 or 876: // Empresas Relacionadas
                     MapearEmpresasRelacionadas(reporte, modulo.Data);
+                    break;
+
+                case 865 or 868: // Score / NivelRiesgo principal del consultado
+                    MapearNivelRiesgoPrincipal(reporte, modulo.Data);
                     break;
             }
         }
@@ -236,5 +259,15 @@ public class EquifaxApiClient : IEquifaxApiClient
                 };
             })
             .ToList();
+    }
+
+    private void MapearNivelRiesgoPrincipal(ReporteCrediticioDto reporte, EquifaxModuloData data)
+    {
+        var riesgoTexto = data.ResumenFlags?.ResumenComportamiento?.ResumenScoreHistorico?.ScoreActual?.Riesgo;
+        if (string.IsNullOrEmpty(riesgoTexto))
+            return;
+
+        reporte.NivelRiesgoTexto = riesgoTexto;
+        reporte.NivelRiesgo = NivelRiesgoMapper.ParseRiesgo(riesgoTexto);
     }
 }

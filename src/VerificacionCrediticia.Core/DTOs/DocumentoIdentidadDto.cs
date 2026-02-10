@@ -30,4 +30,14 @@ public class DocumentoIdentidadDto
     /// Nombre del archivo original procesado
     /// </summary>
     public string? ArchivoOrigen { get; set; }
+
+    /// <summary>
+    /// Resultado de la validacion RENIEC (null si no se ha validado)
+    /// </summary>
+    public bool? DniValidado { get; set; }
+
+    /// <summary>
+    /// Mensaje de la validacion RENIEC
+    /// </summary>
+    public string? MensajeValidacion { get; set; }
 }

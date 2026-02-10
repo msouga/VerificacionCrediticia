@@ -1,10 +1,348 @@
 <div class="evaluar-container">
   <h1>Evaluar Verificacion Crediticia</h1>
 
-  <!-- Formulario -->
+  <!-- Subir DNI -->
+  <mat-card class="upload-card">
+    <mat-card-header>
+      <mat-card-title>1. Documento de Identidad</mat-card-title>
+      <mat-card-subtitle>Suba el DNI del solicitante para extraer sus datos automaticamente</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="drop-zone"
+           [class.drag-over]="dragOver"
+           [class.has-file]="archivoSeleccionado"
+           (dragover)="onDragOver($event)"
+           (dragleave)="onDragLeave($event)"
+           (drop)="onDrop($event)"
+           (click)="fileInput.click()">
+        <input #fileInput type="file" class="hidden-input"
+               accept=".pdf,.jpg,.jpeg,.png,.bmp,.tiff"
+               (change)="onFileSelected($event)">
+        @if (archivoSeleccionado) {
+          <mat-icon class="file-icon">description</mat-icon>
+          <span class="file-name">{{ archivoSeleccionado.name }}</span>
+          <span class="file-size">{{ (archivoSeleccionado.size / 1024) | number:'1.0-0' }} KB</span>
+        } @else {
+          <mat-icon class="upload-icon">cloud_upload</mat-icon>
+          <span class="drop-text">Arrastre el archivo aqui o haga clic para seleccionar</span>
+          <span class="drop-hint">PDF, JPG, PNG (max. 4 MB)</span>
+        }
+      </div>
+
+      <div class="actions-row">
+        @if (loadingDni) {
+          <button mat-flat-button color="primary" disabled>
+            <mat-spinner diameter="20"></mat-spinner>
+            <span>Procesando...</span>
+          </button>
+        } @else {
+          <button mat-flat-button color="primary"
+                  [disabled]="!archivoSeleccionado"
+                  (click)="procesarDni()">
+            <mat-icon>document_scanner</mat-icon>
+            <span>Procesar DNI</span>
+          </button>
+        }
+        @if (archivoSeleccionado) {
+          <button mat-stroked-button (click)="limpiarDni()" [disabled]="loadingDni">
+            <mat-icon>clear</mat-icon>
+            <span>Limpiar</span>
+          </button>
+        }
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Error DNI -->
+  @if (dniError) {
+    <mat-card class="error-card">
+      <mat-card-content>
+        <mat-icon>error</mat-icon>
+        {{ dniError }}
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!-- Resultado DNI -->
+  @if (dniResultado) {
+    <div class="dni-resultado">
+      <div class="dni-header">
+        <mat-icon class="dni-header-icon">badge</mat-icon>
+        <div>
+          <h2>{{ getNombreCompleto() }}</h2>
+          <span class="dni-doc-number">DNI: {{ dniResultado.numeroDocumento || 'No disponible' }}</span>
+        </div>
+        <div class="dni-confianza">
+          <span class="confianza-valor" [class]="getConfianzaColor(dniResultado.confianzaPromedio)">
+            {{ dniResultado.confianzaPromedio | percent:'1.0-0' }}
+          </span>
+          <span class="confianza-label">Confianza</span>
+        </div>
+      </div>
+
+      <!-- Validacion RENIEC -->
+      @if (dniResultado.dniValidado === true) {
+        <div class="reniec-validacion reniec-ok">
+          <mat-icon>check_circle</mat-icon>
+          <span>{{ dniResultado.mensajeValidacion || 'DNI Validado por RENIEC' }}</span>
+        </div>
+      } @else if (dniResultado.dniValidado === false) {
+        <div class="reniec-validacion reniec-error">
+          <mat-icon>cancel</mat-icon>
+          <span>{{ dniResultado.mensajeValidacion || 'DNI no validado por RENIEC' }}</span>
+        </div>
+      }
+
+      <div class="dni-datos-grid">
+        <div class="dni-dato">
+          <span class="dni-dato-label">Nombres</span>
+          <span class="dni-dato-valor">{{ dniResultado.nombres || '-' }}</span>
+        </div>
+        <div class="dni-dato">
+          <span class="dni-dato-label">Apellidos</span>
+          <span class="dni-dato-valor">{{ dniResultado.apellidos || '-' }}</span>
+        </div>
+        <div class="dni-dato">
+          <span class="dni-dato-label">Fecha Nac.</span>
+          <span class="dni-dato-valor">{{ dniResultado.fechaNacimiento || '-' }}</span>
+        </div>
+        <div class="dni-dato">
+          <span class="dni-dato-label">Sexo</span>
+          <span class="dni-dato-valor">{{ dniResultado.sexo || '-' }}</span>
+        </div>
+        <div class="dni-dato">
+          <span class="dni-dato-label">Estado Civil</span>
+          <span class="dni-dato-valor">{{ dniResultado.estadoCivil || '-' }}</span>
+        </div>
+        <div class="dni-dato">
+          <span class="dni-dato-label">Fecha Exp.</span>
+          <span class="dni-dato-valor">{{ dniResultado.fechaExpiracion || '-' }}</span>
+        </div>
+        <div class="dni-dato full-width">
+          <span class="dni-dato-label">Direccion</span>
+          <span class="dni-dato-valor">{{ dniResultado.direccion || '-' }}</span>
+        </div>
+      </div>
+
+      <!-- Confianza por campo -->
+      <mat-expansion-panel class="confianza-panel">
+        <mat-expansion-panel-header>
+          <mat-panel-title>Confianza por campo</mat-panel-title>
+        </mat-expansion-panel-header>
+        <div class="confianza-grid">
+          @for (item of dniResultado.confianza | keyvalue; track item.key) {
+            <div class="confianza-item">
+              <div class="confianza-item-header">
+                <span>{{ getConfianzaLabel(item.key) }}</span>
+                <span class="confianza-pct" [class]="getConfianzaColor(item.value)">
+                  {{ item.value | percent:'1.0-0' }}
+                </span>
+              </div>
+              <mat-progress-bar mode="determinate"
+                                [value]="item.value * 100"
+                                [class]="'bar-' + getConfianzaColor(item.value)">
+              </mat-progress-bar>
+            </div>
+          }
+        </div>
+      </mat-expansion-panel>
+    </div>
+  }
+
+  <!-- Subir Vigencia de Poder -->
+  <mat-card class="upload-card">
+    <mat-card-header>
+      <mat-card-title>1.5 Vigencia de Poderes</mat-card-title>
+      <mat-card-subtitle>Suba la Vigencia de Poder para extraer datos de la empresa y representantes</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="drop-zone"
+           [class.drag-over]="dragOverVigencia"
+           [class.has-file]="archivoVigencia"
+           (dragover)="onDragOverVigencia($event)"
+           (dragleave)="onDragLeaveVigencia($event)"
+           (drop)="onDropVigencia($event)"
+           (click)="fileInputVigencia.click()">
+        <input #fileInputVigencia type="file" class="hidden-input"
+               accept=".pdf,.jpg,.jpeg,.png,.bmp,.tiff"
+               (change)="onFileSelectedVigencia($event)">
+        @if (archivoVigencia) {
+          <mat-icon class="file-icon">description</mat-icon>
+          <span class="file-name">{{ archivoVigencia.name }}</span>
+          <span class="file-size">{{ (archivoVigencia.size / 1024) | number:'1.0-0' }} KB</span>
+        } @else {
+          <mat-icon class="upload-icon">cloud_upload</mat-icon>
+          <span class="drop-text">Arrastre el archivo aqui o haga clic para seleccionar</span>
+          <span class="drop-hint">PDF, JPG, PNG (max. 4 MB)</span>
+        }
+      </div>
+
+      <div class="actions-row">
+        @if (loadingVigencia) {
+          <button mat-flat-button color="primary" disabled>
+            <mat-spinner diameter="20"></mat-spinner>
+            <span>Procesando...</span>
+          </button>
+        } @else {
+          <button mat-flat-button color="primary"
+                  [disabled]="!archivoVigencia"
+                  (click)="procesarVigenciaPoder()">
+            <mat-icon>gavel</mat-icon>
+            <span>Procesar Vigencia</span>
+          </button>
+        }
+        @if (archivoVigencia) {
+          <button mat-stroked-button (click)="limpiarVigencia()" [disabled]="loadingVigencia">
+            <mat-icon>clear</mat-icon>
+            <span>Limpiar</span>
+          </button>
+        }
+      </div>
+
+      <!-- Progreso SSE -->
+      @if (vigenciaProgreso.length > 0) {
+        <div class="progreso-lista">
+          @for (msg of vigenciaProgreso; track $index) {
+            <div class="progreso-item" [class.ultimo]="$last && loadingVigencia">
+              @if ($last && loadingVigencia) {
+                <mat-spinner diameter="14"></mat-spinner>
+              } @else {
+                <mat-icon class="progreso-check">check_circle</mat-icon>
+              }
+              <span>{{ msg }}</span>
+            </div>
+          }
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Error Vigencia -->
+  @if (vigenciaError) {
+    <mat-card class="error-card">
+      <mat-card-content>
+        <mat-icon>error</mat-icon>
+        {{ vigenciaError }}
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!-- Resultado Vigencia de Poder -->
+  @if (vigenciaPoder) {
+    <div class="vigencia-resultado">
+      <div class="vigencia-header">
+        <mat-icon class="vigencia-header-icon">business</mat-icon>
+        <div>
+          <h2>{{ vigenciaPoder.razonSocial || 'Empresa' }}</h2>
+          <span class="vigencia-ruc">RUC: {{ vigenciaPoder.ruc || 'No disponible' }}</span>
+        </div>
+        <div class="dni-confianza">
+          <span class="confianza-valor" [class]="getConfianzaColor(vigenciaPoder.confianzaPromedio)">
+            {{ vigenciaPoder.confianzaPromedio | percent:'1.0-0' }}
+          </span>
+          <span class="confianza-label">Confianza</span>
+        </div>
+      </div>
+
+      <!-- Validacion RUC Equifax -->
+      @if (vigenciaPoder.rucValidado === true) {
+        <div class="reniec-validacion reniec-ok">
+          <mat-icon>check_circle</mat-icon>
+          <span>{{ vigenciaPoder.mensajeValidacionRuc || 'RUC verificado en Equifax' }}</span>
+        </div>
+      } @else if (vigenciaPoder.rucValidado === false) {
+        <div class="reniec-validacion reniec-error">
+          <mat-icon>cancel</mat-icon>
+          <span>{{ vigenciaPoder.mensajeValidacionRuc || 'RUC no encontrado en Equifax' }}</span>
+        </div>
+      }
+
+      <!-- Datos de la empresa -->
+      <div class="dni-datos-grid">
+        <div class="dni-dato">
+          <span class="dni-dato-label">Tipo Persona Juridica</span>
+          <span class="dni-dato-valor">{{ vigenciaPoder.tipoPersonaJuridica || '-' }}</span>
+        </div>
+        <div class="dni-dato">
+          <span class="dni-dato-label">Partida Registral</span>
+          <span class="dni-dato-valor">{{ vigenciaPoder.partidaRegistral || '-' }}</span>
+        </div>
+        <div class="dni-dato">
+          <span class="dni-dato-label">Fecha Constitucion</span>
+          <span class="dni-dato-valor">{{ vigenciaPoder.fechaConstitucion || '-' }}</span>
+        </div>
+        <div class="dni-dato">
+          <span class="dni-dato-label">Capital Social</span>
+          <span class="dni-dato-valor">{{ vigenciaPoder.capitalSocial || '-' }}</span>
+        </div>
+        <div class="dni-dato full-width">
+          <span class="dni-dato-label">Domicilio</span>
+          <span class="dni-dato-valor">{{ vigenciaPoder.domicilio || '-' }}</span>
+        </div>
+        <div class="dni-dato full-width">
+          <span class="dni-dato-label">Objeto Social</span>
+          <span class="dni-dato-valor">{{ vigenciaPoder.objetoSocial || '-' }}</span>
+        </div>
+      </div>
+
+      <!-- Tabla de representantes -->
+      @if (vigenciaPoder.representantes && vigenciaPoder.representantes.length > 0) {
+        <h3 class="representantes-title">Representantes Legales</h3>
+        <div class="representantes-table">
+          <div class="rep-header">
+            <span class="rep-col-nombre">Nombre</span>
+            <span class="rep-col-dni">DNI</span>
+            <span class="rep-col-cargo">Cargo</span>
+            <span class="rep-col-validacion">RENIEC</span>
+          </div>
+          @for (rep of vigenciaPoder.representantes; track rep.documentoIdentidad) {
+            <div class="rep-row">
+              <span class="rep-col-nombre">{{ rep.nombre || '-' }}</span>
+              <span class="rep-col-dni">{{ rep.documentoIdentidad || '-' }}</span>
+              <span class="rep-col-cargo">{{ rep.cargo || '-' }}</span>
+              <span class="rep-col-validacion">
+                @if (rep.dniValidado === true) {
+                  <mat-icon class="validacion-ok">check_circle</mat-icon>
+                } @else if (rep.dniValidado === false) {
+                  <mat-icon class="validacion-error">cancel</mat-icon>
+                } @else {
+                  <mat-icon class="validacion-pending">help_outline</mat-icon>
+                }
+              </span>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Confianza por campo -->
+      <mat-expansion-panel class="confianza-panel">
+        <mat-expansion-panel-header>
+          <mat-panel-title>Confianza por campo</mat-panel-title>
+        </mat-expansion-panel-header>
+        <div class="confianza-grid">
+          @for (item of vigenciaPoder.confianza | keyvalue; track item.key) {
+            <div class="confianza-item">
+              <div class="confianza-item-header">
+                <span>{{ item.key }}</span>
+                <span class="confianza-pct" [class]="getConfianzaColor(item.value)">
+                  {{ item.value | percent:'1.0-0' }}
+                </span>
+              </div>
+              <mat-progress-bar mode="determinate"
+                                [value]="item.value * 100"
+                                [class]="'bar-' + getConfianzaColor(item.value)">
+              </mat-progress-bar>
+            </div>
+          }
+        </div>
+      </mat-expansion-panel>
+    </div>
+  }
+
+  <!-- Formulario de evaluacion -->
   <mat-card class="form-card">
     <mat-card-header>
-      <mat-card-title>Datos de Consulta</mat-card-title>
+      <mat-card-title>2. Datos de Consulta</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <form [formGroup]="form" (ngSubmit)="evaluar()" class="form-grid">

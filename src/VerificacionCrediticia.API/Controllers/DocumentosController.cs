@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using VerificacionCrediticia.Core.DTOs;
 using VerificacionCrediticia.Core.Interfaces;
@@ -9,6 +10,8 @@ namespace VerificacionCrediticia.API.Controllers;
 public class DocumentosController : ControllerBase
 {
     private readonly IDocumentIntelligenceService _documentIntelligenceService;
+    private readonly IReniecValidationService _reniecValidationService;
+    private readonly IEquifaxApiClient _equifaxApiClient;
     private readonly ILogger<DocumentosController> _logger;
 
     private static readonly string[] _extensionesPermitidas = { ".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tiff" };
@@ -16,9 +19,13 @@ public class DocumentosController : ControllerBase
 
     public DocumentosController(
         IDocumentIntelligenceService documentIntelligenceService,
+        IReniecValidationService reniecValidationService,
+        IEquifaxApiClient equifaxApiClient,
         ILogger<DocumentosController> logger)
     {
         _documentIntelligenceService = documentIntelligenceService;
+        _reniecValidationService = reniecValidationService;
+        _equifaxApiClient = equifaxApiClient;
         _logger = logger;
     }
 
@@ -33,39 +40,8 @@ public class DocumentosController : ControllerBase
         IFormFile archivo,
         CancellationToken cancellationToken)
     {
-        // Validar que se envio un archivo
-        if (archivo == null || archivo.Length == 0)
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Archivo requerido",
-                Detail = "Debe enviar un archivo PDF o imagen del DNI",
-                Status = StatusCodes.Status400BadRequest
-            });
-        }
-
-        // Validar extension
-        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-        if (!_extensionesPermitidas.Contains(extension))
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Formato no soportado",
-                Detail = $"Formatos permitidos: {string.Join(", ", _extensionesPermitidas)}",
-                Status = StatusCodes.Status400BadRequest
-            });
-        }
-
-        // Validar tamano
-        if (archivo.Length > _tamanoMaximoBytes)
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Archivo muy grande",
-                Detail = $"El tamano maximo permitido es {_tamanoMaximoBytes / (1024 * 1024)} MB",
-                Status = StatusCodes.Status400BadRequest
-            });
-        }
+        var validacion = ValidarArchivo(archivo);
+        if (validacion != null) return validacion;
 
         _logger.LogInformation(
             "Recibido documento DNI: {NombreArchivo}, Tamano: {Tamano} bytes",
@@ -80,11 +56,22 @@ public class DocumentosController : ControllerBase
                 archivo.FileName,
                 cancellationToken);
 
+            // Validar DNI contra RENIEC
+            if (!string.IsNullOrEmpty(resultado.NumeroDocumento))
+            {
+                _logger.LogInformation("Validando DNI {Dni} contra RENIEC", resultado.NumeroDocumento);
+                var reniec = await _reniecValidationService.ValidarDniAsync(
+                    resultado.NumeroDocumento, cancellationToken);
+
+                resultado.DniValidado = reniec.DniValido;
+                resultado.MensajeValidacion = reniec.Mensaje;
+            }
+
             return Ok(resultado);
         }
-        catch (Azure.RequestFailedException ex)
+        catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Error en Azure Document Intelligence: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Error en Content Understanding: {Mensaje}", ex.Message);
             return StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails
             {
                 Title = "Error al procesar documento",
@@ -92,5 +79,200 @@ public class DocumentosController : ControllerBase
                 Status = StatusCodes.Status500InternalServerError
             });
         }
+        catch (TimeoutException ex)
+        {
+            _logger.LogError(ex, "Timeout en Content Understanding: {Mensaje}", ex.Message);
+            return StatusCode(StatusCodes.Status504GatewayTimeout, new ProblemDetails
+            {
+                Title = "Tiempo de espera agotado",
+                Detail = "El servicio de procesamiento de documentos no respondio a tiempo",
+                Status = StatusCodes.Status504GatewayTimeout
+            });
+        }
+    }
+
+    /// <summary>
+    /// Procesa una Vigencia de Poder con progreso via Server-Sent Events
+    /// </summary>
+    [HttpPost("vigencia-poder")]
+    public async Task ProcesarVigenciaPoder(
+        IFormFile archivo,
+        CancellationToken cancellationToken)
+    {
+        // Validar archivo antes de iniciar stream
+        if (archivo == null || archivo.Length == 0)
+        {
+            Response.StatusCode = 400;
+            await Response.WriteAsJsonAsync(new ProblemDetails
+            {
+                Title = "Archivo requerido",
+                Detail = "Debe enviar un archivo PDF o imagen",
+                Status = 400
+            }, cancellationToken);
+            return;
+        }
+
+        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
+        if (!_extensionesPermitidas.Contains(extension))
+        {
+            Response.StatusCode = 400;
+            await Response.WriteAsJsonAsync(new ProblemDetails
+            {
+                Title = "Formato no soportado",
+                Detail = $"Formatos permitidos: {string.Join(", ", _extensionesPermitidas)}",
+                Status = 400
+            }, cancellationToken);
+            return;
+        }
+
+        if (archivo.Length > _tamanoMaximoBytes)
+        {
+            Response.StatusCode = 400;
+            await Response.WriteAsJsonAsync(new ProblemDetails
+            {
+                Title = "Archivo muy grande",
+                Detail = $"El tamano maximo permitido es {_tamanoMaximoBytes / (1024 * 1024)} MB",
+                Status = 400
+            }, cancellationToken);
+            return;
+        }
+
+        // Iniciar SSE
+        Response.Headers.Append("Content-Type", "text/event-stream");
+        Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("Connection", "keep-alive");
+
+        _logger.LogInformation(
+            "Recibido Vigencia de Poder (SSE): {NombreArchivo}, Tamano: {Tamano} bytes",
+            archivo.FileName, archivo.Length);
+
+        try
+        {
+            await EnviarEvento("progress", "Enviando documento a Azure Content Understanding...", cancellationToken);
+
+            using var stream = archivo.OpenReadStream();
+            var resultado = await _documentIntelligenceService.ProcesarVigenciaPoderAsync(
+                stream,
+                archivo.FileName,
+                cancellationToken);
+
+            var empresa = resultado.RazonSocial ?? "la empresa";
+            await EnviarEvento("progress",
+                $"Documento analizado: {empresa} (RUC: {resultado.Ruc ?? "N/A"})", cancellationToken);
+
+            // Validar RUC contra Equifax
+            if (!string.IsNullOrEmpty(resultado.Ruc))
+            {
+                await EnviarEvento("progress",
+                    $"Validando RUC {resultado.Ruc} contra Equifax...", cancellationToken);
+
+                try
+                {
+                    var reporte = await _equifaxApiClient.ConsultarReporteCrediticioAsync(
+                        "RUC", resultado.Ruc, cancellationToken);
+
+                    resultado.RucValidado = reporte != null;
+                    resultado.MensajeValidacionRuc = reporte != null
+                        ? "RUC verificado en Equifax"
+                        : "RUC no encontrado en Equifax";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "No se pudo validar RUC {Ruc} contra Equifax", resultado.Ruc);
+                    resultado.RucValidado = null;
+                    resultado.MensajeValidacionRuc = "No se pudo verificar el RUC";
+                }
+
+                await EnviarEvento("progress",
+                    resultado.RucValidado == true
+                        ? $"RUC {resultado.Ruc} verificado en Equifax"
+                        : $"RUC {resultado.Ruc}: {resultado.MensajeValidacionRuc}",
+                    cancellationToken);
+            }
+
+            // Validar DNIs de representantes contra RENIEC
+            var totalReps = resultado.Representantes.Count(r => !string.IsNullOrEmpty(r.DocumentoIdentidad));
+            var repIndex = 0;
+            foreach (var rep in resultado.Representantes)
+            {
+                if (string.IsNullOrEmpty(rep.DocumentoIdentidad)) continue;
+                repIndex++;
+
+                await EnviarEvento("progress",
+                    $"Validando representante {repIndex}/{totalReps} contra RENIEC: {rep.Nombre ?? rep.DocumentoIdentidad}...",
+                    cancellationToken);
+
+                var reniec = await _reniecValidationService.ValidarDniAsync(
+                    rep.DocumentoIdentidad, cancellationToken);
+
+                rep.DniValidado = reniec.DniValido;
+                rep.MensajeValidacion = reniec.Mensaje;
+            }
+
+            // Enviar resultado final
+            await EnviarEvento("progress", "Procesamiento completado", cancellationToken);
+            var json = JsonSerializer.Serialize(resultado, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+            await EnviarEvento("result", json, cancellationToken);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Error en Content Understanding: {Mensaje}", ex.Message);
+            await EnviarEvento("error", "El servicio de procesamiento de documentos no pudo analizar el archivo", cancellationToken);
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogError(ex, "Timeout en Content Understanding: {Mensaje}", ex.Message);
+            await EnviarEvento("error", "El servicio de procesamiento de documentos no respondio a tiempo", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error inesperado procesando Vigencia de Poder");
+            await EnviarEvento("error", "Error inesperado al procesar el documento", cancellationToken);
+        }
+    }
+
+    private async Task EnviarEvento(string tipo, string datos, CancellationToken ct)
+    {
+        await Response.WriteAsync($"event: {tipo}\ndata: {datos}\n\n", ct);
+        await Response.Body.FlushAsync(ct);
+    }
+
+    private ActionResult? ValidarArchivo(IFormFile? archivo)
+    {
+        if (archivo == null || archivo.Length == 0)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Archivo requerido",
+                Detail = "Debe enviar un archivo PDF o imagen",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
+        if (!_extensionesPermitidas.Contains(extension))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Formato no soportado",
+                Detail = $"Formatos permitidos: {string.Join(", ", _extensionesPermitidas)}",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        if (archivo.Length > _tamanoMaximoBytes)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Archivo muy grande",
+                Detail = $"El tamano maximo permitido es {_tamanoMaximoBytes / (1024 * 1024)} MB",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        return null;
     }
 }

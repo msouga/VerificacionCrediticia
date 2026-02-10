@@ -648,6 +648,233 @@ public class EquifaxApiClientMock : IEquifaxApiClient
             }
         };
 
+        // ============================================================
+        // CASO 6: Aileen - Primer nivel limpio, problemas en 2do nivel
+        // DNI 46590189 / RUC 20659018901
+        // Nivel 0: Aileen (limpia) + TECH SOLUTIONS IMPORT SAC (limpia)
+        // Nivel 1: 3 socios limpios (Diego, Lucia, Raul)
+        // Nivel 2: Diego conectado a empresa morosa, Lucia a persona castigada
+        // ============================================================
+
+        reportes["46590189"] = new ReporteCrediticioDto
+        {
+            TipoDocumento = "1",
+            NumeroDocumento = "46590189",
+            DatosPersona = new DatosPersonaDto
+            {
+                Nombres = "Aileen Meilyn Lei Koo",
+                FechaNacimiento = "23/10/1990",
+                Nacionalidad = "PERU"
+            },
+            NivelRiesgoTexto = "RIESGO BAJO",
+            NivelRiesgo = NivelRiesgo.Bajo,
+            RepresentantesDe = new List<RepresentanteLegalDto>
+            {
+                new() { TipoDocumento = "6", NumeroDocumento = "20659018901", Nombre = "TECH SOLUTIONS IMPORT SAC", Cargo = "Gerente General", FechaInicioCargo = "01/03/2020", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo }
+            },
+            Deudas = new List<DeudaRegistrada>
+            {
+                new() { Entidad = "BCP", TipoDeuda = "Tarjeta de Credito", MontoOriginal = 12000, SaldoActual = 3500, DiasVencidos = 0, Calificacion = "Normal" },
+                new() { Entidad = "Interbank", TipoDeuda = "Prestamo Personal", MontoOriginal = 25000, SaldoActual = 12000, DiasVencidos = 0, Calificacion = "Normal" }
+            }
+        };
+
+        reportes["20659018901"] = new ReporteCrediticioDto
+        {
+            TipoDocumento = "6",
+            NumeroDocumento = "20659018901",
+            DatosEmpresa = new DatosEmpresaDto
+            {
+                RazonSocial = "TECH SOLUTIONS IMPORT SAC",
+                NombreComercial = "TECHSOL",
+                TipoContribuyente = "SOC.ANONIMA CERRADA",
+                EstadoContribuyente = "ACTIVO",
+                CondicionContribuyente = "HABIDO",
+                InicioActividades = "01/03/2018"
+            },
+            NivelRiesgoTexto = "RIESGO BAJO",
+            NivelRiesgo = NivelRiesgo.Bajo,
+            RepresentadoPor = new List<RepresentanteLegalDto>
+            {
+                new() { TipoDocumento = "1", NumeroDocumento = "46590189", Nombre = "Aileen Meilyn Lei Koo", Cargo = "Gerente General", FechaInicioCargo = "01/03/2020", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo },
+                new() { TipoDocumento = "1", NumeroDocumento = "51515151", Nombre = "Diego Armando Vargas Ramos", Cargo = "Director", FechaInicioCargo = "15/06/2019", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo },
+                new() { TipoDocumento = "1", NumeroDocumento = "52525252", Nombre = "Lucia Andrea Paredes Soto", Cargo = "Representante Legal", FechaInicioCargo = "01/09/2020", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo },
+                new() { TipoDocumento = "1", NumeroDocumento = "53535353", Nombre = "Raul Enrique Montoya Diaz", Cargo = "Apoderado", FechaInicioCargo = "10/01/2021", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo }
+            },
+            Deudas = new List<DeudaRegistrada>
+            {
+                new() { Entidad = "BCP", TipoDeuda = "Linea de Credito", MontoOriginal = 250000, SaldoActual = 80000, DiasVencidos = 0, Calificacion = "Normal" },
+                new() { Entidad = "BBVA", TipoDeuda = "Leasing Equipos", MontoOriginal = 180000, SaldoActual = 95000, DiasVencidos = 0, Calificacion = "Normal" }
+            }
+        };
+
+        // Nivel 1 - Socios limpios pero conectados a problemas en nivel 2
+
+        reportes["51515151"] = new ReporteCrediticioDto
+        {
+            TipoDocumento = "1",
+            NumeroDocumento = "51515151",
+            DatosPersona = new DatosPersonaDto
+            {
+                Nombres = "Diego Armando Vargas Ramos",
+                FechaNacimiento = "05/07/1985",
+                Nacionalidad = "PERU"
+            },
+            NivelRiesgoTexto = "RIESGO BAJO",
+            NivelRiesgo = NivelRiesgo.Bajo,
+            RepresentantesDe = new List<RepresentanteLegalDto>
+            {
+                new() { TipoDocumento = "6", NumeroDocumento = "20659018901", Nombre = "TECH SOLUTIONS IMPORT SAC", Cargo = "Director", FechaInicioCargo = "15/06/2019", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo },
+                new() { TipoDocumento = "6", NumeroDocumento = "20515151510", Nombre = "COMERCIALIZADORA DELTA PERU SAC", Cargo = "Gerente General", FechaInicioCargo = "01/01/2017", NivelRiesgoTexto = "RIESGO ALTO", NivelRiesgo = NivelRiesgo.Alto }
+            },
+            Deudas = new List<DeudaRegistrada>
+            {
+                new() { Entidad = "Interbank", TipoDeuda = "Prestamo Personal", MontoOriginal = 30000, SaldoActual = 15000, DiasVencidos = 0, Calificacion = "Normal" }
+            }
+        };
+
+        reportes["52525252"] = new ReporteCrediticioDto
+        {
+            TipoDocumento = "1",
+            NumeroDocumento = "52525252",
+            DatosPersona = new DatosPersonaDto
+            {
+                Nombres = "Lucia Andrea Paredes Soto",
+                FechaNacimiento = "12/03/1988",
+                Nacionalidad = "PERU"
+            },
+            NivelRiesgoTexto = "RIESGO BAJO",
+            NivelRiesgo = NivelRiesgo.Bajo,
+            RepresentantesDe = new List<RepresentanteLegalDto>
+            {
+                new() { TipoDocumento = "6", NumeroDocumento = "20659018901", Nombre = "TECH SOLUTIONS IMPORT SAC", Cargo = "Representante Legal", FechaInicioCargo = "01/09/2020", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo },
+                new() { TipoDocumento = "6", NumeroDocumento = "20525252520", Nombre = "LOGISTICA INTEGRAL PERU EIRL", Cargo = "Gerente General", FechaInicioCargo = "01/06/2016", NivelRiesgoTexto = "RIESGO MODERADO", NivelRiesgo = NivelRiesgo.Moderado }
+            },
+            Deudas = new List<DeudaRegistrada>
+            {
+                new() { Entidad = "BBVA", TipoDeuda = "Hipotecario", MontoOriginal = 180000, SaldoActual = 140000, DiasVencidos = 0, Calificacion = "Normal" }
+            }
+        };
+
+        reportes["53535353"] = new ReporteCrediticioDto
+        {
+            TipoDocumento = "1",
+            NumeroDocumento = "53535353",
+            DatosPersona = new DatosPersonaDto
+            {
+                Nombres = "Raul Enrique Montoya Diaz",
+                FechaNacimiento = "28/11/1979",
+                Nacionalidad = "PERU"
+            },
+            NivelRiesgoTexto = "RIESGO BAJO",
+            NivelRiesgo = NivelRiesgo.Bajo,
+            RepresentantesDe = new List<RepresentanteLegalDto>
+            {
+                new() { TipoDocumento = "6", NumeroDocumento = "20659018901", Nombre = "TECH SOLUTIONS IMPORT SAC", Cargo = "Apoderado", FechaInicioCargo = "10/01/2021", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo }
+            },
+            Deudas = new List<DeudaRegistrada>
+            {
+                new() { Entidad = "BCP", TipoDeuda = "Tarjeta de Credito", MontoOriginal = 8000, SaldoActual = 2000, DiasVencidos = 0, Calificacion = "Normal" }
+            }
+        };
+
+        // Nivel 2 - Empresas y personas con problemas
+
+        reportes["20515151510"] = new ReporteCrediticioDto
+        {
+            TipoDocumento = "6",
+            NumeroDocumento = "20515151510",
+            DatosEmpresa = new DatosEmpresaDto
+            {
+                RazonSocial = "COMERCIALIZADORA DELTA PERU SAC",
+                NombreComercial = "COMDELTA",
+                TipoContribuyente = "SOC.ANONIMA CERRADA",
+                EstadoContribuyente = "ACTIVO",
+                CondicionContribuyente = "NO HABIDO"
+            },
+            NivelRiesgoTexto = "RIESGO ALTO",
+            NivelRiesgo = NivelRiesgo.Alto,
+            RepresentadoPor = new List<RepresentanteLegalDto>
+            {
+                new() { TipoDocumento = "1", NumeroDocumento = "51515151", Nombre = "Diego Armando Vargas Ramos", Cargo = "Gerente General", FechaInicioCargo = "01/01/2017", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo },
+                new() { TipoDocumento = "1", NumeroDocumento = "54545454", Nombre = "Oscar Favio Huaman Rios", Cargo = "Representante Legal", FechaInicioCargo = "01/01/2017", NivelRiesgoTexto = "RIESGO MUY ALTO", NivelRiesgo = NivelRiesgo.MuyAlto }
+            },
+            Deudas = new List<DeudaRegistrada>
+            {
+                new() { Entidad = "Scotiabank", TipoDeuda = "Linea de Credito", MontoOriginal = 200000, SaldoActual = 280000, DiasVencidos = 120, Calificacion = "Dudoso", FechaVencimiento = DateTime.Now.AddDays(-120) },
+                new() { Entidad = "SUNAT", TipoDeuda = "Deuda Tributaria", MontoOriginal = 65000, SaldoActual = 78000, DiasVencidos = 90, Calificacion = "Deficiente", FechaVencimiento = DateTime.Now.AddDays(-90) }
+            }
+        };
+
+        reportes["54545454"] = new ReporteCrediticioDto
+        {
+            TipoDocumento = "1",
+            NumeroDocumento = "54545454",
+            DatosPersona = new DatosPersonaDto
+            {
+                Nombres = "Oscar Favio Huaman Rios",
+                FechaNacimiento = "15/02/1970"
+            },
+            NivelRiesgoTexto = "RIESGO MUY ALTO",
+            NivelRiesgo = NivelRiesgo.MuyAlto,
+            RepresentantesDe = new List<RepresentanteLegalDto>
+            {
+                new() { TipoDocumento = "6", NumeroDocumento = "20515151510", Nombre = "COMERCIALIZADORA DELTA PERU SAC", Cargo = "Representante Legal", FechaInicioCargo = "01/01/2017", NivelRiesgoTexto = "RIESGO ALTO", NivelRiesgo = NivelRiesgo.Alto }
+            },
+            Deudas = new List<DeudaRegistrada>
+            {
+                new() { Entidad = "BCP", TipoDeuda = "Prestamo Comercial", MontoOriginal = 80000, SaldoActual = 120000, DiasVencidos = 250, Calificacion = "Perdida", FechaVencimiento = DateTime.Now.AddDays(-250) },
+                new() { Entidad = "Caja Huancayo", TipoDeuda = "Credito PYME", MontoOriginal = 25000, SaldoActual = 38000, DiasVencidos = 180, Calificacion = "Perdida", FechaVencimiento = DateTime.Now.AddDays(-180) }
+            }
+        };
+
+        reportes["20525252520"] = new ReporteCrediticioDto
+        {
+            TipoDocumento = "6",
+            NumeroDocumento = "20525252520",
+            DatosEmpresa = new DatosEmpresaDto
+            {
+                RazonSocial = "LOGISTICA INTEGRAL PERU EIRL",
+                NombreComercial = "LOGINTPERU",
+                TipoContribuyente = "EMPRESA IND.RESP.LTDA",
+                EstadoContribuyente = "ACTIVO",
+                CondicionContribuyente = "HABIDO"
+            },
+            NivelRiesgoTexto = "RIESGO MODERADO",
+            NivelRiesgo = NivelRiesgo.Moderado,
+            RepresentadoPor = new List<RepresentanteLegalDto>
+            {
+                new() { TipoDocumento = "1", NumeroDocumento = "52525252", Nombre = "Lucia Andrea Paredes Soto", Cargo = "Gerente General", FechaInicioCargo = "01/06/2016", NivelRiesgoTexto = "RIESGO BAJO", NivelRiesgo = NivelRiesgo.Bajo },
+                new() { TipoDocumento = "1", NumeroDocumento = "55505050", Nombre = "Victor Manuel Quispe Torres", Cargo = "Apoderado", FechaInicioCargo = "15/03/2018", NivelRiesgoTexto = "RIESGO ALTO", NivelRiesgo = NivelRiesgo.Alto }
+            },
+            Deudas = new List<DeudaRegistrada>
+            {
+                new() { Entidad = "Interbank", TipoDeuda = "Capital de Trabajo", MontoOriginal = 120000, SaldoActual = 95000, DiasVencidos = 45, Calificacion = "CPP", FechaVencimiento = DateTime.Now.AddDays(-45) }
+            }
+        };
+
+        reportes["55505050"] = new ReporteCrediticioDto
+        {
+            TipoDocumento = "1",
+            NumeroDocumento = "55505050",
+            DatosPersona = new DatosPersonaDto
+            {
+                Nombres = "Victor Manuel Quispe Torres",
+                FechaNacimiento = "20/09/1975"
+            },
+            NivelRiesgoTexto = "RIESGO ALTO",
+            NivelRiesgo = NivelRiesgo.Alto,
+            RepresentantesDe = new List<RepresentanteLegalDto>
+            {
+                new() { TipoDocumento = "6", NumeroDocumento = "20525252520", Nombre = "LOGISTICA INTEGRAL PERU EIRL", Cargo = "Apoderado", FechaInicioCargo = "15/03/2018", NivelRiesgoTexto = "RIESGO MODERADO", NivelRiesgo = NivelRiesgo.Moderado }
+            },
+            Deudas = new List<DeudaRegistrada>
+            {
+                new() { Entidad = "Scotiabank", TipoDeuda = "Prestamo Personal", MontoOriginal = 40000, SaldoActual = 58000, DiasVencidos = 150, Calificacion = "Dudoso", FechaVencimiento = DateTime.Now.AddDays(-150) },
+                new() { Entidad = "Financiera Oh!", TipoDeuda = "Tarjeta de Credito", MontoOriginal = 5000, SaldoActual = 9500, DiasVencidos = 100, Calificacion = "Deficiente", FechaVencimiento = DateTime.Now.AddDays(-100) }
+            }
+        };
+
         return reportes;
     }
 }

@@ -44,10 +44,16 @@ public class EquifaxPersonalInformation
 public class EquifaxModulo
 {
     [JsonPropertyName("Codigo")]
-    public string Codigo { get; set; } = string.Empty;
+    public int Codigo { get; set; }
 
     [JsonPropertyName("Nombre")]
     public string Nombre { get; set; } = string.Empty;
+
+    [JsonPropertyName("TieneError")]
+    public bool TieneError { get; set; }
+
+    [JsonPropertyName("DetallesError")]
+    public EquifaxDetallesError? DetallesError { get; set; }
 
     [JsonPropertyName("Data")]
     public EquifaxModuloData? Data { get; set; }
@@ -72,6 +78,9 @@ public class EquifaxModuloData
 
     [JsonPropertyName("ResumenConsulta")]
     public EquifaxResumenConsulta? ResumenConsulta { get; set; }
+
+    [JsonPropertyName("ResumenFlags")]
+    public EquifaxResumenFlags? ResumenFlags { get; set; }
 }
 
 public class EquifaxRepresentantesLegales
@@ -191,7 +200,7 @@ public class EquifaxDirectorioSunatEntry
     public string? InicioActividades { get; set; }
 
     [JsonPropertyName("NumeroTrabajadores")]
-    public int? NumeroTrabajadores { get; set; }
+    public string? NumeroTrabajadores { get; set; }
 }
 
 public class EquifaxDirectorioPersona
@@ -243,4 +252,16 @@ public class EquifaxDetallesError
 
     [JsonPropertyName("MensajeError")]
     public string? MensajeError { get; set; }
+}
+
+public class EquifaxResumenFlags
+{
+    [JsonPropertyName("ResumenComportamiento")]
+    public EquifaxResumenComportamiento? ResumenComportamiento { get; set; }
+}
+
+public class EquifaxResumenComportamiento
+{
+    [JsonPropertyName("ResumenScoreHistorico")]
+    public EquifaxScoreHistoricos? ResumenScoreHistorico { get; set; }
 }

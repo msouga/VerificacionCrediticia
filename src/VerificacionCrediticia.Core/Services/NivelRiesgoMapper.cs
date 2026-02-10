@@ -8,6 +8,13 @@ public static class NivelRiesgoMapper
     {
         return riesgoTexto?.ToUpperInvariant() switch
         {
+            // Formato API real Equifax LATAM Peru
+            "MUY BAJO" => NivelRiesgo.MuyBajo,
+            "BAJO" => NivelRiesgo.Bajo,
+            "MEDIO" => NivelRiesgo.Moderado,
+            "ALTO" => NivelRiesgo.Alto,
+            "MUY ALTO" => NivelRiesgo.MuyAlto,
+            // Formato mock (compatibilidad)
             "RIESGO BAJO" => NivelRiesgo.Bajo,
             "RIESGO MODERADO" => NivelRiesgo.Moderado,
             "RIESGO ALTO" => NivelRiesgo.Alto,
@@ -20,6 +27,7 @@ public static class NivelRiesgoMapper
     {
         return riesgo switch
         {
+            NivelRiesgo.MuyBajo => EstadoCrediticio.Normal,
             NivelRiesgo.Bajo => EstadoCrediticio.Normal,
             NivelRiesgo.Moderado => EstadoCrediticio.ConProblemasPotenciales,
             NivelRiesgo.Alto => EstadoCrediticio.Moroso,
@@ -32,6 +40,7 @@ public static class NivelRiesgoMapper
     {
         return riesgo switch
         {
+            NivelRiesgo.MuyBajo => 900m,
             NivelRiesgo.Bajo => 800m,
             NivelRiesgo.Moderado => 550m,
             NivelRiesgo.Alto => 350m,
@@ -44,11 +53,12 @@ public static class NivelRiesgoMapper
     {
         return riesgo switch
         {
-            NivelRiesgo.Bajo => "RIESGO BAJO",
-            NivelRiesgo.Moderado => "RIESGO MODERADO",
-            NivelRiesgo.Alto => "RIESGO ALTO",
-            NivelRiesgo.MuyAlto => "RIESGO MUY ALTO",
-            _ => "RIESGO MODERADO"
+            NivelRiesgo.MuyBajo => "MUY BAJO",
+            NivelRiesgo.Bajo => "BAJO",
+            NivelRiesgo.Moderado => "MEDIO",
+            NivelRiesgo.Alto => "ALTO",
+            NivelRiesgo.MuyAlto => "MUY ALTO",
+            _ => "MEDIO"
         };
     }
 }

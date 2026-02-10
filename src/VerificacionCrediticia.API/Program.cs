@@ -1,6 +1,12 @@
+using Serilog;
 using VerificacionCrediticia.API.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configurar Serilog desde appsettings
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services));
 
 // Configurar servicios
 builder.Services.AddControllers();
@@ -46,6 +52,7 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+app.UseSerilogRequestLogging();
 app.UseCors("AllowDashboard");
 app.UseAuthorization();
 app.MapControllers();

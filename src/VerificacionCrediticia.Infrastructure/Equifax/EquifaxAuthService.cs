@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
@@ -78,8 +79,13 @@ public class EquifaxAuthService : IEquifaxAuthService
 
     private class TokenResponse
     {
+        [JsonPropertyName("access_token")]
         public string? AccessToken { get; set; }
+
+        [JsonPropertyName("token_type")]
         public string? TokenType { get; set; }
+
+        [JsonPropertyName("expires_in")]
         public int ExpiresIn { get; set; }
     }
 }

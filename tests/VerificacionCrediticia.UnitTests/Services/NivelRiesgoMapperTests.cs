@@ -7,12 +7,22 @@ namespace VerificacionCrediticia.UnitTests.Services;
 public class NivelRiesgoMapperTests
 {
     [Theory]
+    // Formato API real Equifax LATAM Peru
+    [InlineData("MUY BAJO", NivelRiesgo.MuyBajo)]
+    [InlineData("BAJO", NivelRiesgo.Bajo)]
+    [InlineData("MEDIO", NivelRiesgo.Moderado)]
+    [InlineData("ALTO", NivelRiesgo.Alto)]
+    [InlineData("MUY ALTO", NivelRiesgo.MuyAlto)]
+    // Formato mock (compatibilidad)
     [InlineData("RIESGO BAJO", NivelRiesgo.Bajo)]
     [InlineData("RIESGO MODERADO", NivelRiesgo.Moderado)]
     [InlineData("RIESGO ALTO", NivelRiesgo.Alto)]
     [InlineData("RIESGO MUY ALTO", NivelRiesgo.MuyAlto)]
+    // Case insensitive
     [InlineData("riesgo bajo", NivelRiesgo.Bajo)]
     [InlineData("Riesgo Alto", NivelRiesgo.Alto)]
+    [InlineData("medio", NivelRiesgo.Moderado)]
+    [InlineData("muy bajo", NivelRiesgo.MuyBajo)]
     public void ParseRiesgo_TextoValido_RetornaNivelCorrecto(string texto, NivelRiesgo esperado)
     {
         var resultado = NivelRiesgoMapper.ParseRiesgo(texto);
@@ -31,6 +41,7 @@ public class NivelRiesgoMapperTests
     }
 
     [Theory]
+    [InlineData(NivelRiesgo.MuyBajo, EstadoCrediticio.Normal)]
     [InlineData(NivelRiesgo.Bajo, EstadoCrediticio.Normal)]
     [InlineData(NivelRiesgo.Moderado, EstadoCrediticio.ConProblemasPotenciales)]
     [InlineData(NivelRiesgo.Alto, EstadoCrediticio.Moroso)]
@@ -42,6 +53,7 @@ public class NivelRiesgoMapperTests
     }
 
     [Theory]
+    [InlineData(NivelRiesgo.MuyBajo, 900)]
     [InlineData(NivelRiesgo.Bajo, 800)]
     [InlineData(NivelRiesgo.Moderado, 550)]
     [InlineData(NivelRiesgo.Alto, 350)]
@@ -53,10 +65,11 @@ public class NivelRiesgoMapperTests
     }
 
     [Theory]
-    [InlineData(NivelRiesgo.Bajo, "RIESGO BAJO")]
-    [InlineData(NivelRiesgo.Moderado, "RIESGO MODERADO")]
-    [InlineData(NivelRiesgo.Alto, "RIESGO ALTO")]
-    [InlineData(NivelRiesgo.MuyAlto, "RIESGO MUY ALTO")]
+    [InlineData(NivelRiesgo.MuyBajo, "MUY BAJO")]
+    [InlineData(NivelRiesgo.Bajo, "BAJO")]
+    [InlineData(NivelRiesgo.Moderado, "MEDIO")]
+    [InlineData(NivelRiesgo.Alto, "ALTO")]
+    [InlineData(NivelRiesgo.MuyAlto, "MUY ALTO")]
     public void ToTextoEquifax_RetornaTextoCorrecto(NivelRiesgo riesgo, string esperado)
     {
         var resultado = NivelRiesgoMapper.ToTextoEquifax(riesgo);
@@ -66,7 +79,7 @@ public class NivelRiesgoMapperTests
     [Fact]
     public void RoundTrip_ParseYToTexto_SonConsistentes()
     {
-        var niveles = new[] { NivelRiesgo.Bajo, NivelRiesgo.Moderado, NivelRiesgo.Alto, NivelRiesgo.MuyAlto };
+        var niveles = new[] { NivelRiesgo.MuyBajo, NivelRiesgo.Bajo, NivelRiesgo.Moderado, NivelRiesgo.Alto, NivelRiesgo.MuyAlto };
 
         foreach (var nivel in niveles)
         {
@@ -74,6 +87,13 @@ public class NivelRiesgoMapperTests
             var parseado = NivelRiesgoMapper.ParseRiesgo(texto);
             Assert.Equal(nivel, parseado);
         }
+    }
+
+    [Fact]
+    public void ToScoreNumerico_MuyBajo_SuperaUmbralAprobacion()
+    {
+        var score = NivelRiesgoMapper.ToScoreNumerico(NivelRiesgo.MuyBajo);
+        Assert.True(score >= 600, "Riesgo Muy Bajo debe superar umbral de aprobacion (600)");
     }
 
     [Fact]

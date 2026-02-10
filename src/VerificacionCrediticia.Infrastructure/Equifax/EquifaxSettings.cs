@@ -4,7 +4,7 @@ public class EquifaxSettings
 {
     public const string SectionName = "Equifax";
 
-    public string BaseUrl { get; set; } = "https://api.equifax.com";
+    public string BaseUrl { get; set; } = "https://api.latam.equifax.com";
     public string ClientId { get; set; } = string.Empty;
     public string ClientSecret { get; set; } = string.Empty;
     public string Scope { get; set; } = string.Empty;
@@ -16,6 +16,6 @@ public class EquifaxSettings
     public string? ShipTo { get; set; }
 
     public string EffectiveBaseUrl => UseSandbox
-        ? "https://api.sandbox.equifax.com"
+        ? "https://api.uat.latam.equifax.com"
         : BaseUrl;
 }

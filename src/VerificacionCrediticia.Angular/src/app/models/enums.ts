@@ -37,6 +37,7 @@ export enum TipoNodo {
 }
 
 export enum NivelRiesgo {
+  MuyBajo = 'MuyBajo',
   Bajo = 'Bajo',
   Moderado = 'Moderado',
   Alto = 'Alto',

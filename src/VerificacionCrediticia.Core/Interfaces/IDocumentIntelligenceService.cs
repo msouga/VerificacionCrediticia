@@ -18,4 +18,12 @@ public interface IDocumentIntelligenceService
         Stream documentStream,
         string nombreArchivo,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Procesa una Vigencia de Poder y extrae datos de empresa y representantes
+    /// </summary>
+    Task<VigenciaPoderDto> ProcesarVigenciaPoderAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default);
 }
