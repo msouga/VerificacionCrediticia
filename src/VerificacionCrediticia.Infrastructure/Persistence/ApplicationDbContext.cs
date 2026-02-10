@@ -55,7 +55,8 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(e => e.FechaCreacion)
                 .HasDatabaseName("IX_Expedientes_FechaCreacion");
 
-            entity.Property(e => e.DniSolicitante).IsRequired().HasMaxLength(8);
+            entity.Property(e => e.Descripcion).IsRequired().HasMaxLength(40);
+            entity.Property(e => e.DniSolicitante).HasMaxLength(8);
             entity.Property(e => e.NombresSolicitante).HasMaxLength(100);
             entity.Property(e => e.ApellidosSolicitante).HasMaxLength(100);
             entity.Property(e => e.RucEmpresa).HasMaxLength(11);

@@ -1,9 +1,6 @@
 import { Component, ChangeDetectionStrategy, ChangeDetectorRef, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -32,9 +29,8 @@ interface DocumentoSlot {
   selector: 'app-expediente',
   standalone: true,
   imports: [
-    ReactiveFormsModule, MatCardModule, MatFormFieldModule, MatInputModule,
-    MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatProgressBarModule,
-    MatExpansionModule, MatChipsModule, MatTooltipModule,
+    MatCardModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule,
+    MatProgressBarModule, MatExpansionModule, MatChipsModule, MatTooltipModule,
     DecimalPipe, PercentPipe, DatePipe
   ],
   templateUrl: './expediente.component.html',
@@ -42,10 +38,8 @@ interface DocumentoSlot {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ExpedienteComponent implements OnInit {
-  form: FormGroup;
   expediente: Expediente | null = null;
   loading = false;
-  creando = false;
   evaluando = false;
   error: string | null = null;
 
@@ -55,50 +49,19 @@ export class ExpedienteComponent implements OnInit {
   private tamanoMaximoMb = 4;
 
   constructor(
-    private fb: FormBuilder,
     private api: VerificacionApiService,
     private route: ActivatedRoute,
     private router: Router,
     private cdr: ChangeDetectorRef
-  ) {
-    this.form = this.fb.group({
-      dniSolicitante: ['', [Validators.required, Validators.pattern(/^\d{8}$/)]],
-      rucEmpresa: ['', [Validators.pattern(/^\d{11}$/)]]
-    });
-  }
+  ) {}
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
       this.cargarExpediente(+id);
+    } else {
+      this.router.navigate(['/expedientes'], { replaceUrl: true });
     }
-  }
-
-  crearExpediente(): void {
-    if (this.form.invalid) return;
-
-    this.creando = true;
-    this.error = null;
-
-    const request = {
-      dniSolicitante: this.form.value.dniSolicitante,
-      rucEmpresa: this.form.value.rucEmpresa || undefined
-    };
-
-    this.api.crearExpediente(request).subscribe({
-      next: (exp) => {
-        this.expediente = exp;
-        this.creando = false;
-        this.buildSlots();
-        this.cdr.markForCheck();
-        this.router.navigate(['/expediente', exp.id], { replaceUrl: true });
-      },
-      error: (err) => {
-        this.error = err.error?.detail || err.message || 'Error al crear expediente';
-        this.creando = false;
-        this.cdr.markForCheck();
-      }
-    });
   }
 
   private cargarExpediente(id: number): void {
@@ -261,12 +224,8 @@ export class ExpedienteComponent implements OnInit {
     });
   }
 
-  nuevoExpediente(): void {
-    this.expediente = null;
-    this.documentoSlots = [];
-    this.error = null;
-    this.form.reset();
-    this.router.navigate(['/expediente'], { replaceUrl: true });
+  volverAListado(): void {
+    this.router.navigate(['/expedientes']);
   }
 
   // Helpers de estado

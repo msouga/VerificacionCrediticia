@@ -9,7 +9,8 @@ import { VigenciaPoder } from '../models/vigencia-poder.model';
 import { BalanceGeneral } from '../models/balance-general.model';
 import { EstadoResultados } from '../models/estado-resultados.model';
 import {
-  Expediente, CrearExpedienteRequest, TipoDocumento
+  Expediente, CrearExpedienteRequest, ActualizarExpedienteRequest,
+  TipoDocumento, ListaExpedientesResponse
 } from '../models/expediente.model';
 import {
   TipoDocumentoConfig, ActualizarTipoDocumentoRequest
@@ -197,6 +198,27 @@ export class VerificacionApiService {
     return this.http.post<Expediente>(
       `${this.baseUrl}/api/expedientes`,
       request
+    );
+  }
+
+  listarExpedientes(pagina: number, tamanoPagina: number): Observable<ListaExpedientesResponse> {
+    return this.http.get<ListaExpedientesResponse>(
+      `${this.baseUrl}/api/expedientes`,
+      { params: { pagina: pagina.toString(), tamanoPagina: tamanoPagina.toString() } }
+    );
+  }
+
+  actualizarExpediente(id: number, request: ActualizarExpedienteRequest): Observable<Expediente> {
+    return this.http.put<Expediente>(
+      `${this.baseUrl}/api/expedientes/${id}`,
+      request
+    );
+  }
+
+  eliminarExpedientes(ids: number[]): Observable<void> {
+    return this.http.delete<void>(
+      `${this.baseUrl}/api/expedientes`,
+      { body: { ids } }
     );
   }
 

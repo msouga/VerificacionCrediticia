@@ -8,8 +8,11 @@ public class Expediente
     public int Id { get; set; }
 
     [Required]
+    [MaxLength(40)]
+    public string Descripcion { get; set; } = string.Empty;
+
     [MaxLength(8)]
-    public string DniSolicitante { get; set; } = string.Empty;
+    public string? DniSolicitante { get; set; }
 
     [MaxLength(100)]
     public string? NombresSolicitante { get; set; }
@@ -29,7 +32,7 @@ public class Expediente
 
     public DateTime? FechaEvaluacion { get; set; }
 
-    // Navegación
+    // Navegacion
     public virtual ICollection<DocumentoProcesado> Documentos { get; set; } = new List<DocumentoProcesado>();
     public virtual ResultadoEvaluacionPersistido? ResultadoEvaluacion { get; set; }
 }

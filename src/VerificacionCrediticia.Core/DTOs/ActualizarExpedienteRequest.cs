@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace VerificacionCrediticia.Core.DTOs;
 
-public class CrearExpedienteRequest
+public class ActualizarExpedienteRequest
 {
     [Required(ErrorMessage = "La descripcion es obligatoria")]
     [MaxLength(40, ErrorMessage = "La descripcion no puede exceder 40 caracteres")]

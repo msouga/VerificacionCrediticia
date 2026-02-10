@@ -42,16 +42,68 @@ public class ExpedienteService : IExpedienteService
     {
         var expediente = new Expediente
         {
-            DniSolicitante = request.DniSolicitante,
-            RucEmpresa = request.RucEmpresa,
+            Descripcion = request.Descripcion,
             Estado = EstadoExpediente.Iniciado,
             FechaCreacion = DateTime.UtcNow
         };
 
         var created = await _expedienteRepo.CreateAsync(expediente);
-        _logger.LogInformation("Expediente {Id} creado para DNI {Dni}", created.Id, created.DniSolicitante);
+        _logger.LogInformation("Expediente {Id} creado: {Descripcion}", created.Id, created.Descripcion);
 
         return await BuildExpedienteDtoAsync(created.Id);
+    }
+
+    public async Task<ListaExpedientesResponse> ListarExpedientesAsync(int pagina, int tamanoPagina)
+    {
+        var (items, total) = await _expedienteRepo.GetPaginadoAsync(pagina, tamanoPagina);
+        var tiposObligatorios = await _tipoDocumentoRepo.GetObligatoriosAsync();
+
+        var resumen = items.Select(exp =>
+        {
+            var docsProcesados = exp.Documentos
+                .Where(d => d.Estado == EstadoDocumento.Procesado)
+                .Select(d => d.TipoDocumentoId)
+                .ToHashSet();
+
+            return new ExpedienteResumenDto
+            {
+                Id = exp.Id,
+                Descripcion = exp.Descripcion,
+                DniSolicitante = exp.DniSolicitante,
+                NombresSolicitante = exp.NombresSolicitante,
+                RucEmpresa = exp.RucEmpresa,
+                RazonSocialEmpresa = exp.RazonSocialEmpresa,
+                Estado = exp.Estado,
+                FechaCreacion = exp.FechaCreacion,
+                DocumentosObligatoriosCompletos = tiposObligatorios.Count(t => docsProcesados.Contains(t.Id)),
+                TotalDocumentosObligatorios = tiposObligatorios.Count
+            };
+        }).ToList();
+
+        return new ListaExpedientesResponse
+        {
+            Items = resumen,
+            Total = total,
+            Pagina = pagina,
+            TamanoPagina = tamanoPagina
+        };
+    }
+
+    public async Task<ExpedienteDto> ActualizarExpedienteAsync(int id, ActualizarExpedienteRequest request)
+    {
+        var expediente = await _expedienteRepo.GetByIdAsync(id)
+            ?? throw new KeyNotFoundException($"Expediente {id} no encontrado");
+
+        expediente.Descripcion = request.Descripcion;
+        await _expedienteRepo.UpdateAsync(expediente);
+
+        return await BuildExpedienteDtoAsync(id);
+    }
+
+    public async Task EliminarExpedientesAsync(List<int> ids)
+    {
+        await _expedienteRepo.DeleteManyAsync(ids);
+        _logger.LogInformation("Expedientes eliminados: {Ids}", string.Join(", ", ids));
     }
 
     public async Task<ExpedienteDto?> GetExpedienteAsync(int id)
@@ -252,6 +304,11 @@ public class ExpedienteService : IExpedienteService
         // Auto-llenar datos del solicitante desde el DNI
         if (codigoTipo == "DNI" && resultado is DocumentoIdentidadDto dni)
         {
+            if (string.IsNullOrEmpty(expediente.DniSolicitante) && !string.IsNullOrEmpty(dni.NumeroDocumento))
+            {
+                expediente.DniSolicitante = dni.NumeroDocumento;
+                actualizado = true;
+            }
             if (string.IsNullOrEmpty(expediente.NombresSolicitante) && !string.IsNullOrEmpty(dni.Nombres))
             {
                 expediente.NombresSolicitante = dni.Nombres;
@@ -427,6 +484,7 @@ public class ExpedienteService : IExpedienteService
         var dto = new ExpedienteDto
         {
             Id = expediente.Id,
+            Descripcion = expediente.Descripcion,
             DniSolicitante = expediente.DniSolicitante,
             NombresSolicitante = expediente.NombresSolicitante,
             ApellidosSolicitante = expediente.ApellidosSolicitante,

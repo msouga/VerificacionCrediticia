@@ -60,6 +60,19 @@ public class ExpedienteRepository : IExpedienteRepository
         }
     }
 
+    public async Task DeleteManyAsync(List<int> ids)
+    {
+        var expedientes = await _context.Expedientes
+            .Where(e => ids.Contains(e.Id))
+            .ToListAsync();
+
+        if (expedientes.Count > 0)
+        {
+            _context.Expedientes.RemoveRange(expedientes);
+            await _context.SaveChangesAsync();
+        }
+    }
+
     public async Task<bool> ExistsAsync(int id)
     {
         return await _context.Expedientes
@@ -72,5 +85,22 @@ public class ExpedienteRepository : IExpedienteRepository
             .AsNoTracking()
             .OrderByDescending(e => e.FechaCreacion)
             .ToListAsync();
+    }
+
+    public async Task<(List<Expediente> Items, int Total)> GetPaginadoAsync(int pagina, int tamanoPagina)
+    {
+        var query = _context.Expedientes.AsNoTracking();
+
+        var total = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(e => e.FechaCreacion)
+            .Skip((pagina - 1) * tamanoPagina)
+            .Take(tamanoPagina)
+            .Include(e => e.Documentos)
+                .ThenInclude(d => d.TipoDocumento)
+            .ToListAsync();
+
+        return (items, total);
     }
 }

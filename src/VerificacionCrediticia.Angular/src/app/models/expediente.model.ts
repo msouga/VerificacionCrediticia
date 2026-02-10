@@ -19,8 +19,11 @@ export enum ResultadoRegla {
 }
 
 export interface CrearExpedienteRequest {
-  dniSolicitante: string;
-  rucEmpresa?: string;
+  descripcion: string;
+}
+
+export interface ActualizarExpedienteRequest {
+  descripcion: string;
 }
 
 export interface TipoDocumento {
@@ -66,7 +69,8 @@ export interface ResultadoEvaluacionExpediente {
 
 export interface Expediente {
   id: number;
-  dniSolicitante: string;
+  descripcion: string;
+  dniSolicitante: string | null;
   nombresSolicitante: string | null;
   apellidosSolicitante: string | null;
   rucEmpresa: string | null;
@@ -80,4 +84,24 @@ export interface Expediente {
   totalDocumentosObligatorios: number;
   puedeEvaluar: boolean;
   resultadoEvaluacion: ResultadoEvaluacionExpediente | null;
+}
+
+export interface ExpedienteResumen {
+  id: number;
+  descripcion: string;
+  dniSolicitante: string | null;
+  nombresSolicitante: string | null;
+  rucEmpresa: string | null;
+  razonSocialEmpresa: string | null;
+  estado: EstadoExpediente;
+  fechaCreacion: string;
+  documentosObligatoriosCompletos: number;
+  totalDocumentosObligatorios: number;
+}
+
+export interface ListaExpedientesResponse {
+  items: ExpedienteResumen[];
+  total: number;
+  pagina: number;
+  tamanoPagina: number;
 }

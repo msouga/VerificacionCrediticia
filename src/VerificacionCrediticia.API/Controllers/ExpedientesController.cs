@@ -24,6 +24,23 @@ public class ExpedientesController : ControllerBase
     }
 
     /// <summary>
+    /// Listar expedientes con paginacion
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(ListaExpedientesResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ListaExpedientesResponse>> ListarExpedientes(
+        [FromQuery] int pagina = 1,
+        [FromQuery] int tamanoPagina = 10)
+    {
+        if (pagina < 1) pagina = 1;
+        if (tamanoPagina < 1) tamanoPagina = 10;
+        if (tamanoPagina > 50) tamanoPagina = 50;
+
+        var resultado = await _expedienteService.ListarExpedientesAsync(pagina, tamanoPagina);
+        return Ok(resultado);
+    }
+
+    /// <summary>
     /// Crear un nuevo expediente crediticio
     /// </summary>
     [HttpPost]
@@ -42,7 +59,7 @@ public class ExpedientesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creando expediente para DNI {Dni}", request.DniSolicitante);
+            _logger.LogError(ex, "Error creando expediente: {Descripcion}", request.Descripcion);
             return StatusCode(500, new ProblemDetails
             {
                 Title = "Error interno",
@@ -73,6 +90,54 @@ public class ExpedientesController : ControllerBase
     }
 
     /// <summary>
+    /// Actualizar descripcion de un expediente
+    /// </summary>
+    [HttpPut("{id:int}")]
+    [ProducesResponseType(typeof(ExpedienteDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ExpedienteDto>> ActualizarExpediente(
+        int id,
+        [FromBody] ActualizarExpedienteRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var expediente = await _expedienteService.ActualizarExpedienteAsync(id, request);
+            return Ok(expediente);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "No encontrado",
+                Detail = ex.Message,
+                Status = 404
+            });
+        }
+    }
+
+    /// <summary>
+    /// Eliminar expedientes en lote
+    /// </summary>
+    [HttpDelete]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> EliminarExpedientes([FromBody] EliminarExpedientesRequest request)
+    {
+        if (request.Ids == null || request.Ids.Count == 0)
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Solicitud invalida",
+                Detail = "Debe especificar al menos un ID",
+                Status = 400
+            });
+
+        await _expedienteService.EliminarExpedientesAsync(request.Ids);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Procesar un documento para un expediente (SSE con progreso)
     /// </summary>
     [HttpPost("{id:int}/documentos/{codigoTipo}")]
@@ -89,7 +154,7 @@ public class ExpedientesController : ControllerBase
             Response.StatusCode = 400;
             await Response.WriteAsJsonAsync(new ProblemDetails
             {
-                Title = "Archivo inválido",
+                Title = "Archivo invalido",
                 Detail = error,
                 Status = 400
             }, cancellationToken);
@@ -159,7 +224,7 @@ public class ExpedientesController : ControllerBase
             Response.StatusCode = 400;
             await Response.WriteAsJsonAsync(new ProblemDetails
             {
-                Title = "Archivo inválido",
+                Title = "Archivo invalido",
                 Detail = error,
                 Status = 400
             }, cancellationToken);
@@ -236,7 +301,7 @@ public class ExpedientesController : ControllerBase
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Operación no permitida",
+                Title = "Operacion no permitida",
                 Detail = ex.Message,
                 Status = 400
             });
@@ -285,4 +350,9 @@ public class ExpedientesController : ControllerBase
 
         return null;
     }
+}
+
+public class EliminarExpedientesRequest
+{
+    public List<int> Ids { get; set; } = new();
 }

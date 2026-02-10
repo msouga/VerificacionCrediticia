@@ -5,7 +5,8 @@ namespace VerificacionCrediticia.Core.DTOs;
 public class ExpedienteDto
 {
     public int Id { get; set; }
-    public string DniSolicitante { get; set; } = string.Empty;
+    public string Descripcion { get; set; } = string.Empty;
+    public string? DniSolicitante { get; set; }
     public string? NombresSolicitante { get; set; }
     public string? ApellidosSolicitante { get; set; }
     public string? RucEmpresa { get; set; }
@@ -17,7 +18,7 @@ public class ExpedienteDto
     // Documentos procesados
     public List<DocumentoProcesadoResumenDto> Documentos { get; set; } = new();
 
-    // Tipos de documento requeridos (para saber cuáles faltan)
+    // Tipos de documento requeridos (para saber cuales faltan)
     public List<TipoDocumentoDto> TiposDocumentoRequeridos { get; set; } = new();
 
     // Contadores de progreso
@@ -25,7 +26,7 @@ public class ExpedienteDto
     public int TotalDocumentosObligatorios { get; set; }
     public bool PuedeEvaluar { get; set; }
 
-    // Resultado de evaluación (si existe)
+    // Resultado de evaluacion (si existe)
     public ResultadoEvaluacionExpedienteDto? ResultadoEvaluacion { get; set; }
 }
 

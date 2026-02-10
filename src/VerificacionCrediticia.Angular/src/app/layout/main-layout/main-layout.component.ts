@@ -22,7 +22,7 @@ export class MainLayoutComponent {
 
   navItems = [
     { label: 'Dashboard', icon: 'dashboard', route: '/' },
-    { label: 'Expediente', icon: 'folder_open', route: '/expediente' },
+    { label: 'Expedientes', icon: 'folder_open', route: '/expedientes' },
     { label: 'Evaluar', icon: 'search', route: '/evaluar' },
     { label: 'Historial', icon: 'history', route: '/historial' },
     { label: 'Configuracion', icon: 'settings', route: '/configuracion' }

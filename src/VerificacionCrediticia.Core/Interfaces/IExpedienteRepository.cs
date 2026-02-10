@@ -10,6 +10,8 @@ public interface IExpedienteRepository
     Task<Expediente> CreateAsync(Expediente expediente);
     Task UpdateAsync(Expediente expediente);
     Task DeleteAsync(int id);
+    Task DeleteManyAsync(List<int> ids);
     Task<bool> ExistsAsync(int id);
     Task<List<Expediente>> GetAllAsync();
+    Task<(List<Expediente> Items, int Total)> GetPaginadoAsync(int pagina, int tamanoPagina);
 }
