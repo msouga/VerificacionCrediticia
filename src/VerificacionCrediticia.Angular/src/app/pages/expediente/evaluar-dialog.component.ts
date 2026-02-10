@@ -33,9 +33,12 @@ export interface EvaluarDialogResult {
         @if (archivoActual) {
           <p class="archivo-actual">Procesando: {{ archivoActual }}</p>
         }
-        @if (pasoActual) {
+        @if (detalleActual) {
+          <p class="paso-actual">{{ detalleActual }}</p>
+        } @else if (pasoActual) {
           <p class="paso-actual">{{ pasoActual }}</p>
         }
+
         @if (totalDocumentos > 0) {
           <p class="doc-count">Documento {{ documentoActual }} de {{ totalDocumentos }}</p>
         }
@@ -109,11 +112,13 @@ export interface EvaluarDialogResult {
 export class EvaluarDialogComponent {
   archivoActual = '';
   pasoActual = '';
+  detalleActual = '';
   documentoActual = 0;
   totalDocumentos = 0;
   porcentaje = 0;
   completado = false;
   errorMsg = '';
+  private documentosCompletados = 0;
 
   private abortController = new AbortController();
 
@@ -133,13 +138,21 @@ export class EvaluarDialogComponent {
         this.data.expedienteId,
         {
           onProgress: (progreso: ProgresoEvaluacion) => {
+            // Si cambio de documento, contar el anterior como completado
+            if (progreso.archivo && progreso.archivo !== this.archivoActual && this.archivoActual) {
+              this.documentosCompletados++;
+            }
             this.archivoActual = progreso.archivo;
             this.pasoActual = progreso.paso;
+            this.detalleActual = progreso.detalle || '';
             this.documentoActual = progreso.documentoActual;
             this.totalDocumentos = progreso.totalDocumentos;
+
+            // Porcentaje basado en documentos completados
             this.porcentaje = this.totalDocumentos > 0
-              ? Math.round((this.documentoActual / this.totalDocumentos) * 100)
+              ? Math.round((this.documentosCompletados / this.totalDocumentos) * 100)
               : 0;
+
             this.cdr.markForCheck();
           },
           onResult: (expediente: Expediente) => {

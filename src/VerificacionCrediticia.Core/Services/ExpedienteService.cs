@@ -255,8 +255,20 @@ public class ExpedienteService : IExpedienteService
                 doc.Estado = EstadoDocumento.Procesando;
                 await _documentoRepo.UpdateAsync(doc);
 
+                // Crear adaptador de progreso: mensajes de polling de CU -> ProgresoEvaluacionDto
+                IProgress<string>? progresoDetalle = progreso != null
+                    ? new Progress<string>(mensaje => progreso.Report(new ProgresoEvaluacionDto
+                    {
+                        Archivo = doc.NombreArchivo,
+                        Paso = $"Procesando con IA: {doc.TipoDocumento?.Nombre ?? codigoTipo}...",
+                        Detalle = mensaje,
+                        DocumentoActual = docIndex,
+                        TotalDocumentos = totalDocumentos
+                    }))
+                    : null;
+
                 // Procesar con Content Understanding
-                var resultado = await ProcesarConReintento(codigoTipo, stream, doc.NombreArchivo, docIndex, totalDocumentos, progreso, cancellationToken);
+                var resultado = await ProcesarConReintento(codigoTipo, stream, doc.NombreArchivo, docIndex, totalDocumentos, progreso, progresoDetalle, cancellationToken);
 
                 // Guardar resultado
                 doc.DatosExtraidosJson = JsonSerializer.Serialize(resultado, JsonOptions);
@@ -387,11 +399,12 @@ public class ExpedienteService : IExpedienteService
         string codigoTipo, Stream stream, string fileName,
         int docIndex, int totalDocumentos,
         IProgress<ProgresoEvaluacionDto>? progreso,
+        IProgress<string>? progresoDetalle,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await ProcesarSegunTipoAsync(codigoTipo, stream, fileName);
+            return await ProcesarSegunTipoAsync(codigoTipo, stream, fileName, cancellationToken, progresoDetalle);
         }
         catch (OperationCanceledException)
         {
@@ -417,19 +430,21 @@ public class ExpedienteService : IExpedienteService
                 stream.Position = 0;
             }
 
-            return await ProcesarSegunTipoAsync(codigoTipo, stream, fileName);
+            return await ProcesarSegunTipoAsync(codigoTipo, stream, fileName, cancellationToken, progresoDetalle);
         }
     }
 
     private async Task<object> ProcesarSegunTipoAsync(
-        string codigoTipo, Stream documentStream, string fileName)
+        string codigoTipo, Stream documentStream, string fileName,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
     {
         return codigoTipo switch
         {
-            "DNI" => await _documentIntelligence.ProcesarDocumentoIdentidadAsync(documentStream, fileName),
-            "VIGENCIA_PODER" => await _documentIntelligence.ProcesarVigenciaPoderAsync(documentStream, fileName, default, null),
-            "BALANCE_GENERAL" => await _documentIntelligence.ProcesarBalanceGeneralAsync(documentStream, fileName, default, null),
-            "ESTADO_RESULTADOS" => await _documentIntelligence.ProcesarEstadoResultadosAsync(documentStream, fileName, default, null),
+            "DNI" => await _documentIntelligence.ProcesarDocumentoIdentidadAsync(documentStream, fileName, cancellationToken),
+            "VIGENCIA_PODER" => await _documentIntelligence.ProcesarVigenciaPoderAsync(documentStream, fileName, cancellationToken, progreso),
+            "BALANCE_GENERAL" => await _documentIntelligence.ProcesarBalanceGeneralAsync(documentStream, fileName, cancellationToken, progreso),
+            "ESTADO_RESULTADOS" => await _documentIntelligence.ProcesarEstadoResultadosAsync(documentStream, fileName, cancellationToken, progreso),
             _ => throw new NotSupportedException($"Tipo de documento '{codigoTipo}' no tiene procesamiento implementado")
         };
     }

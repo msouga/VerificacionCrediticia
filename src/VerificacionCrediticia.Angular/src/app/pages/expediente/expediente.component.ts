@@ -268,13 +268,21 @@ export class ExpedienteComponent implements OnInit {
     return labels[valor] || 'Desconocido';
   }
 
-  getReglaResultadoClass(resultado: ResultadoRegla): string {
-    const classes: Record<number, string> = {
-      [ResultadoRegla.Aprobar]: 'regla-aprobar',
-      [ResultadoRegla.Rechazar]: 'regla-rechazar',
-      [ResultadoRegla.Revisar]: 'regla-revisar'
-    };
-    return classes[resultado] || '';
+  getReglaResultadoClass(regla: { cumplida: boolean; resultadoRegla: ResultadoRegla }): string {
+    // Si la condicion de riesgo no se cumple, es positivo (verde)
+    if (!regla.cumplida && regla.resultadoRegla !== ResultadoRegla.Aprobar) {
+      return 'regla-aprobar';
+    }
+    // Si la condicion de riesgo se cumple, mostrar el color del resultado
+    if (regla.cumplida && regla.resultadoRegla !== ResultadoRegla.Aprobar) {
+      const classes: Record<number, string> = {
+        [ResultadoRegla.Rechazar]: 'regla-rechazar',
+        [ResultadoRegla.Revisar]: 'regla-revisar'
+      };
+      return classes[regla.resultadoRegla] || '';
+    }
+    // Reglas de tipo Aprobar: verde si se cumple, rojo si no
+    return regla.cumplida ? 'regla-aprobar' : 'regla-rechazar';
   }
 
   get progreso(): number {

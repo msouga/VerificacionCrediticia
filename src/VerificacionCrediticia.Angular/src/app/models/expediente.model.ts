@@ -16,6 +16,7 @@ export enum EstadoDocumento {
 export interface ProgresoEvaluacion {
   archivo: string;
   paso: string;
+  detalle?: string;
   documentoActual: number;
   totalDocumentos: number;
 }

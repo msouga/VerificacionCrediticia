@@ -62,7 +62,8 @@ tests/
 ## Flujo de expedientes
 1. **Subir documentos**: POST va a Azure Blob Storage, estado = Subido (4), respuesta JSON instantanea
 2. **Evaluar**: POST SSE descarga cada doc del blob, lo procesa con Content Understanding, aplica reglas crediticias
-   - Eventos SSE: `progress` (JSON ProgresoEvaluacionDto), `result` (JSON ExpedienteDto), `error` (texto)
+   - Eventos SSE: `progress` (JSON ProgresoEvaluacionDto con archivo, paso, detalle, documentoActual, totalDocumentos), `result` (JSON ExpedienteDto), `error` (texto)
+   - `detalle` contiene mensajes de polling de Content Understanding (ej: "Analizando estructura...", "Extrayendo texto con OCR...")
    - Soporta cancelacion via CancellationToken/AbortController
    - Retry automatico (1 intento) si falla un documento
 
