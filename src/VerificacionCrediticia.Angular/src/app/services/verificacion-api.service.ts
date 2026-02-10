@@ -8,7 +8,8 @@ import {
   DocumentoProcesadoResumen, ProgresoEvaluacion
 } from '../models/expediente.model';
 import {
-  TipoDocumentoConfig, ActualizarTipoDocumentoRequest
+  TipoDocumentoConfig, ActualizarTipoDocumentoRequest,
+  ReglaEvaluacionConfig, CrearReglaRequest, ActualizarReglaRequest
 } from '../models/configuracion.model';
 
 @Injectable({ providedIn: 'root' })
@@ -71,6 +72,34 @@ export class VerificacionApiService {
     return this.http.put<TipoDocumentoConfig>(
       `${this.baseUrl}/api/configuracion/tipos-documento/${id}`,
       data
+    );
+  }
+
+  // Reglas de evaluacion
+
+  getReglas(): Observable<ReglaEvaluacionConfig[]> {
+    return this.http.get<ReglaEvaluacionConfig[]>(
+      `${this.baseUrl}/api/configuracion/reglas`
+    );
+  }
+
+  crearRegla(request: CrearReglaRequest): Observable<ReglaEvaluacionConfig> {
+    return this.http.post<ReglaEvaluacionConfig>(
+      `${this.baseUrl}/api/configuracion/reglas`,
+      request
+    );
+  }
+
+  actualizarRegla(id: number, request: ActualizarReglaRequest): Observable<ReglaEvaluacionConfig> {
+    return this.http.put<ReglaEvaluacionConfig>(
+      `${this.baseUrl}/api/configuracion/reglas/${id}`,
+      request
+    );
+  }
+
+  eliminarRegla(id: number): Observable<void> {
+    return this.http.delete<void>(
+      `${this.baseUrl}/api/configuracion/reglas/${id}`
     );
   }
 

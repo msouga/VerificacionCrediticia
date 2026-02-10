@@ -25,7 +25,7 @@
           <ng-container matColumnDef="analyzerId">
             <th mat-header-cell *matHeaderCellDef>Analyzer ID</th>
             <td mat-cell *matCellDef="let tipo">
-              <code>{{ tipo.analyzerId || '—' }}</code>
+              <code>{{ tipo.analyzerId || '(ninguno)' }}</code>
             </td>
           </ng-container>
 
@@ -69,6 +69,147 @@
           <tr mat-row *matRowDef="let row; columns: displayedColumns;"
               [class.inactivo]="!row.activo"></tr>
         </table>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <h2 class="seccion-reglas">Reglas de Evaluacion</h2>
+
+  @if (cargandoReglas) {
+    <div class="spinner-container">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+  } @else {
+    <mat-card>
+      <mat-card-content>
+        <div class="reglas-header">
+          <button mat-flat-button color="primary" (click)="abrirNuevaRegla()">
+            <mat-icon>add</mat-icon>
+            Agregar regla
+          </button>
+        </div>
+
+        <div class="reglas-table-container">
+          <table mat-table [dataSource]="reglas" class="reglas-table">
+
+            <ng-container matColumnDef="nombre">
+              <th mat-header-cell *matHeaderCellDef>Nombre</th>
+              <td mat-cell *matCellDef="let regla">
+                <span class="regla-nombre">{{ regla.nombre }}</span>
+                @if (regla.descripcion) {
+                  <span class="regla-descripcion">{{ regla.descripcion }}</span>
+                }
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="campo">
+              <th mat-header-cell *matHeaderCellDef>Campo</th>
+              <td mat-cell *matCellDef="let regla">
+                <code>{{ regla.campo }}</code>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="operador">
+              <th mat-header-cell *matHeaderCellDef>Op.</th>
+              <td mat-cell *matCellDef="let regla">
+                <select
+                  class="inline-select operador-select"
+                  [value]="regla.operador"
+                  [disabled]="actualizandoReglaId === regla.id"
+                  (change)="onOperadorChange(regla, +$any($event.target).value)">
+                  @for (op of operadores; track op.valor) {
+                    <option [value]="op.valor">{{ op.simbolo }}</option>
+                  }
+                </select>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="valor">
+              <th mat-header-cell *matHeaderCellDef>Valor</th>
+              <td mat-cell *matCellDef="let regla">
+                <input
+                  type="number"
+                  class="valor-input"
+                  [value]="regla.valor"
+                  [disabled]="actualizandoReglaId === regla.id"
+                  (blur)="onReglaValorBlur(regla, $event)"
+                  step="any">
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="peso">
+              <th mat-header-cell *matHeaderCellDef>Peso</th>
+              <td mat-cell *matCellDef="let regla">
+                <input
+                  type="number"
+                  class="peso-input"
+                  [value]="regla.peso"
+                  [disabled]="actualizandoReglaId === regla.id"
+                  (blur)="onReglaPesoBlur(regla, $event)"
+                  min="0"
+                  max="1"
+                  step="0.05">
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="resultado">
+              <th mat-header-cell *matHeaderCellDef>Resultado</th>
+              <td mat-cell *matCellDef="let regla">
+                <select
+                  class="inline-select resultado-select"
+                  [class]="'inline-select resultado-select resultado-' + getResultadoColor(regla.resultado)"
+                  [value]="regla.resultado"
+                  [disabled]="actualizandoReglaId === regla.id"
+                  (change)="onResultadoChange(regla, +$any($event.target).value)">
+                  @for (res of resultados; track res.valor) {
+                    <option [value]="res.valor">{{ res.nombre }}</option>
+                  }
+                </select>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="activa">
+              <th mat-header-cell *matHeaderCellDef>Activa</th>
+              <td mat-cell *matCellDef="let regla">
+                <mat-slide-toggle
+                  [checked]="regla.activa"
+                  [disabled]="actualizandoReglaId === regla.id"
+                  (change)="toggleReglaActiva(regla, $event.checked)">
+                </mat-slide-toggle>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="orden">
+              <th mat-header-cell *matHeaderCellDef>Orden</th>
+              <td mat-cell *matCellDef="let regla">
+                <input
+                  type="number"
+                  class="orden-input"
+                  [value]="regla.orden"
+                  [disabled]="actualizandoReglaId === regla.id"
+                  (blur)="onReglaOrdenBlur(regla, $event)"
+                  min="0"
+                  max="99">
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="acciones">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let regla">
+                <button mat-icon-button color="warn"
+                        [disabled]="actualizandoReglaId === regla.id"
+                        (click)="eliminarRegla(regla)"
+                        title="Eliminar regla">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="reglasColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: reglasColumns;"
+                [class.inactivo]="!row.activa"></tr>
+          </table>
+        </div>
       </mat-card-content>
     </mat-card>
   }

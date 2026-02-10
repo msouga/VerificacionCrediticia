@@ -48,6 +48,15 @@ tests/
 - `POST /api/documentos/estado-resultados` - Procesa Estado de Resultados (multipart/form-data, respuesta SSE)
   - Eventos SSE: `progress` (texto), `result` (JSON), `error` (texto)
 
+## Endpoints de configuracion
+- `GET /api/configuracion/tipos-documento` - Listar tipos de documento
+- `PUT /api/configuracion/tipos-documento/{id}` - Actualizar tipo de documento
+- `GET /api/configuracion/reglas` - Listar reglas de evaluacion (ordenadas por Orden)
+- `GET /api/configuracion/reglas/{id}` - Obtener regla
+- `POST /api/configuracion/reglas` - Crear regla
+- `PUT /api/configuracion/reglas/{id}` - Actualizar regla (valor, peso, operador, resultado, activa, orden)
+- `DELETE /api/configuracion/reglas/{id}` - Eliminar regla
+
 ## Endpoints de expedientes
 - `POST /api/expedientes` - Crear expediente
 - `GET /api/expedientes?pagina=1&tamanoPagina=10` - Listar paginado
