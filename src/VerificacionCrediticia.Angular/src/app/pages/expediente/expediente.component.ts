@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, ChangeDetectorRef, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -39,6 +39,12 @@ interface DocumentoSlot {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ExpedienteComponent implements OnInit {
+  private api = inject(VerificacionApiService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private cdr = inject(ChangeDetectorRef);
+  private dialog = inject(MatDialog);
+
   expediente: Expediente | null = null;
   loading = false;
   error: string | null = null;
@@ -47,14 +53,6 @@ export class ExpedienteComponent implements OnInit {
 
   private extensionesPermitidas = ['.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff'];
   private tamanoMaximoMb = 4;
-
-  constructor(
-    private api: VerificacionApiService,
-    private route: ActivatedRoute,
-    private router: Router,
-    private cdr: ChangeDetectorRef,
-    private dialog: MatDialog
-  ) {}
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');

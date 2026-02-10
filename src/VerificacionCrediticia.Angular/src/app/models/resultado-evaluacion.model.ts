@@ -57,6 +57,6 @@ export interface ResultadoEvaluacion {
   recomendacion: Recomendacion;
   resumen: ResumenRed;
   alertas: Alerta[];
-  grafo?: { [key: string]: NodoRed };
+  grafo?: Record<string, NodoRed>;
   fechaEvaluacion: string;
 }

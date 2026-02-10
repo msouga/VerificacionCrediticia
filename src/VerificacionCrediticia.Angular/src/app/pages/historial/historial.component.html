@@ -194,7 +194,7 @@
 
 <!-- Detail overlay -->
 @if (selectedEval) {
-  <div class="detail-overlay" (click)="closeDetail()">
+  <div class="detail-overlay" (click)="closeDetail()" (keydown.escape)="closeDetail()" role="dialog">
     <mat-card class="detail-dialog" (click)="$event.stopPropagation()">
       <mat-card-header>
         <mat-card-title>Detalle de Evaluacion</mat-card-title>

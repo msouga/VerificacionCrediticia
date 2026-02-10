@@ -1,4 +1,4 @@
-import { Injectable, ErrorHandler } from '@angular/core';
+import { Injectable, ErrorHandler, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { ApplicationInsights } from '@microsoft/applicationinsights-web';
 import { environment } from '../environments/environment';
@@ -20,10 +20,12 @@ interface LogEntry {
 
 @Injectable({ providedIn: 'root' })
 export class LoggingService {
+  private http = inject(HttpClient);
+
   private appInsights: ApplicationInsights | null = null;
   private apiUrl = `${environment.apiBaseUrl}/api/logs`;
 
-  constructor(private http: HttpClient) {
+  constructor() {
     this.initAppInsights();
   }
 
@@ -90,6 +92,7 @@ export class LoggingService {
     if (nivel === LogLevel.Warning || nivel === LogLevel.Error) {
       const entry: LogEntry = { nivel, mensaje, origen, datos, stackTrace: err?.stack };
       this.http.post(this.apiUrl, entry).subscribe({
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
         error: () => {} // Silenciar errores del log para evitar loops
       });
     }
@@ -108,7 +111,8 @@ export class LoggingService {
 
 @Injectable()
 export class GlobalErrorHandler implements ErrorHandler {
-  constructor(private logging: LoggingService) {}
+  private logging = inject(LoggingService);
+
 
   handleError(error: Error): void {
     this.logging.error(

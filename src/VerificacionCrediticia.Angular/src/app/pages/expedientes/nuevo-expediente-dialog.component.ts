@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -31,9 +31,9 @@ import { FormsModule } from '@angular/forms';
   `
 })
 export class NuevoExpedienteDialogComponent {
-  descripcion = '';
+  private dialogRef = inject<MatDialogRef<NuevoExpedienteDialogComponent>>(MatDialogRef);
 
-  constructor(private dialogRef: MatDialogRef<NuevoExpedienteDialogComponent>) {}
+  descripcion = '';
 
   crear(): void {
     if (this.descripcion.trim()) {

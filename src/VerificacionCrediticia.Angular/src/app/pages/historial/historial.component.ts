@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, DestroyRef, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, AfterViewInit, ViewChild, DestroyRef, inject, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -50,7 +50,9 @@ interface EvaluacionHistorial {
   styleUrl: './historial.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class HistorialComponent implements OnInit {
+export class HistorialComponent implements OnInit, AfterViewInit {
+  private dialog = inject(MatDialog);
+
   private destroyRef = inject(DestroyRef);
   searchControl = new FormControl('');
   resultadoFilter = new FormControl('');
@@ -78,8 +80,6 @@ export class HistorialComponent implements OnInit {
     'Alimentos del Peru EIRL', 'Textiles Modernos SAC', 'Transportes Rapidos SAC',
     'Consultores Unidos EIRL'
   ];
-
-  constructor(private dialog: MatDialog) {}
 
   ngOnInit(): void {
     this.generateMockData();

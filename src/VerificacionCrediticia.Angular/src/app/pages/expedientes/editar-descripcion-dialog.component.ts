@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -30,12 +30,16 @@ import { FormsModule } from '@angular/forms';
   `
 })
 export class EditarDescripcionDialogComponent {
+  private dialogRef = inject<MatDialogRef<EditarDescripcionDialogComponent>>(MatDialogRef);
+  data = inject<{
+    descripcion: string;
+}>(MAT_DIALOG_DATA);
+
   descripcion: string;
 
-  constructor(
-    private dialogRef: MatDialogRef<EditarDescripcionDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { descripcion: string }
-  ) {
+  constructor() {
+    const data = this.data;
+
     this.descripcion = data.descripcion;
   }
 

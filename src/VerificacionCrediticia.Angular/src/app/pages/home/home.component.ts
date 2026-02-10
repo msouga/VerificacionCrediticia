@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -45,13 +45,11 @@ interface TendenciaDia {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class HomeComponent {
-  today = new Date();
+  private dialog = inject(MatDialog);
+  private api = inject(VerificacionApiService);
+  private router = inject(Router);
 
-  constructor(
-    private dialog: MatDialog,
-    private api: VerificacionApiService,
-    private router: Router
-  ) {}
+  today = new Date();
 
   nuevoExpediente(): void {
     const dialogRef = this.dialog.open(NuevoExpedienteDialogComponent, {

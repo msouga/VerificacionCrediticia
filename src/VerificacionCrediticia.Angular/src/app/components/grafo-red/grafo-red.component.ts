@@ -16,7 +16,7 @@ import cytoscape from 'cytoscape';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class GrafoRedComponent implements OnChanges, AfterViewInit {
-  @Input() grafo?: { [key: string]: NodoRed };
+  @Input() grafo?: Record<string, NodoRed>;
   @Input() dniSolicitante = '';
   @Input() rucEmpresa = '';
 
@@ -107,6 +107,7 @@ export class GrafoRedComponent implements OnChanges, AfterViewInit {
             'background-color': 'data(color)',
             'border-color': 'data(borderColor)',
             'border-width': 'data(borderWidth)',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             'shape': 'data(shape)' as any,
             'width': 'data(width)',
             'height': 'data(height)',
@@ -128,6 +129,7 @@ export class GrafoRedComponent implements OnChanges, AfterViewInit {
             'color': '#666',
             'text-background-color': '#fff',
             'text-background-opacity': 0.8,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             'text-background-padding': '2px' as any,
           }
         },
@@ -150,6 +152,7 @@ export class GrafoRedComponent implements OnChanges, AfterViewInit {
         idealEdgeLength: () => 120,
         gravity: 0.5,
         padding: 50,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
       minZoom: 0.3,
       maxZoom: 3,

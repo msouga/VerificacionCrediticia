@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -110,6 +110,11 @@ export interface EvaluarDialogResult {
   `]
 })
 export class EvaluarDialogComponent {
+  private dialogRef = inject<MatDialogRef<EvaluarDialogComponent, EvaluarDialogResult>>(MatDialogRef);
+  private data = inject<EvaluarDialogData>(MAT_DIALOG_DATA);
+  private api = inject(VerificacionApiService);
+  private cdr = inject(ChangeDetectorRef);
+
   archivoActual = '';
   pasoActual = '';
   detalleActual = '';
@@ -122,12 +127,7 @@ export class EvaluarDialogComponent {
 
   private abortController = new AbortController();
 
-  constructor(
-    private dialogRef: MatDialogRef<EvaluarDialogComponent, EvaluarDialogResult>,
-    @Inject(MAT_DIALOG_DATA) private data: EvaluarDialogData,
-    private api: VerificacionApiService,
-    private cdr: ChangeDetectorRef
-  ) {
+  constructor() {
     this.dialogRef.disableClose = true;
     this.iniciarEvaluacion();
   }

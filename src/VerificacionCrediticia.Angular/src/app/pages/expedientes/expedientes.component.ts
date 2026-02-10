@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, ViewChild } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, ViewChild, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatTableModule } from '@angular/material/table';
@@ -37,6 +37,11 @@ import { ConfirmarEliminarDialogComponent } from './confirmar-eliminar-dialog.co
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ExpedientesComponent implements OnInit {
+  private api = inject(VerificacionApiService);
+  private router = inject(Router);
+  private dialog = inject(MatDialog);
+  private cdr = inject(ChangeDetectorRef);
+
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   displayedColumns = ['select', 'id', 'descripcion', 'dniSolicitante', 'rucEmpresa', 'razonSocialEmpresa', 'estado', 'fechaCreacion', 'acciones'];
@@ -48,13 +53,6 @@ export class ExpedientesComponent implements OnInit {
   tamanoPagina = 10;
   loading = false;
   eliminando = false;
-
-  constructor(
-    private api: VerificacionApiService,
-    private router: Router,
-    private dialog: MatDialog,
-    private cdr: ChangeDetectorRef
-  ) {}
 
   ngOnInit(): void {
     this.cargarExpedientes();

@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
@@ -44,6 +44,11 @@ import { NuevaReglaDialogComponent } from './nueva-regla-dialog.component';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ConfiguracionComponent implements OnInit {
+  private api = inject(VerificacionApiService);
+  private snackBar = inject(MatSnackBar);
+  private cdr = inject(ChangeDetectorRef);
+  private dialog = inject(MatDialog);
+
   // Tipos de documento
   tipos: TipoDocumentoConfig[] = [];
   displayedColumns = ['nombre', 'codigo', 'analyzerId', 'obligatorio', 'activo', 'orden'];
@@ -70,13 +75,6 @@ export class ConfiguracionComponent implements OnInit {
     { valor: 1, nombre: 'Rechazar', color: 'rechazar' },
     { valor: 2, nombre: 'Revisar', color: 'revisar' }
   ];
-
-  constructor(
-    private api: VerificacionApiService,
-    private snackBar: MatSnackBar,
-    private cdr: ChangeDetectorRef,
-    private dialog: MatDialog
-  ) {}
 
   ngOnInit(): void {
     this.cargarTipos();

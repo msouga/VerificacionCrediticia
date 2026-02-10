@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -99,6 +99,8 @@ import { CrearReglaRequest } from '../../models/configuracion.model';
   `]
 })
 export class NuevaReglaDialogComponent {
+  private dialogRef = inject<MatDialogRef<NuevaReglaDialogComponent>>(MatDialogRef);
+
   regla: CrearReglaRequest = {
     nombre: '',
     descripcion: null,
@@ -129,8 +131,6 @@ export class NuevaReglaDialogComponent {
     { valor: 1, nombre: 'Rechazar' },
     { valor: 2, nombre: 'Revisar' }
   ];
-
-  constructor(private dialogRef: MatDialogRef<NuevaReglaDialogComponent>) {}
 
   esValida(): boolean {
     return this.regla.nombre.trim().length > 0
