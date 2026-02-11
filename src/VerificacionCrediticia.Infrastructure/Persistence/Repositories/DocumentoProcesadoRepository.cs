@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using VerificacionCrediticia.Core.Entities;
+using VerificacionCrediticia.Core.Enums;
 using VerificacionCrediticia.Core.Interfaces;
 
 namespace VerificacionCrediticia.Infrastructure.Persistence.Repositories;
@@ -37,6 +38,15 @@ public class DocumentoProcesadoRepository : IDocumentoProcesadoRepository
             .Where(d => d.ExpedienteId == expedienteId)
             .AsNoTracking()
             .OrderBy(d => d.TipoDocumento.Orden)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<DocumentoProcesado>> GetByEstadosAsync(EstadoDocumento[] estados, CancellationToken cancellationToken = default)
+    {
+        return await _context.DocumentosProcesados
+            .Include(d => d.TipoDocumento)
+            .Where(d => estados.Contains(d.Estado))
+            .AsNoTracking()
             .ToListAsync(cancellationToken);
     }
 

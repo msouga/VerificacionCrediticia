@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, OnInit, OnDestroy, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -38,7 +38,7 @@ interface DocumentoSlot {
   styleUrl: './expediente.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ExpedienteComponent implements OnInit {
+export class ExpedienteComponent implements OnInit, OnDestroy {
   private api = inject(VerificacionApiService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -53,6 +53,7 @@ export class ExpedienteComponent implements OnInit {
 
   private extensionesPermitidas = ['.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff'];
   private tamanoMaximoMb = 4;
+  private pollingInterval: ReturnType<typeof setInterval> | null = null;
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -63,6 +64,10 @@ export class ExpedienteComponent implements OnInit {
     }
   }
 
+  ngOnDestroy(): void {
+    this.detenerPolling();
+  }
+
   private cargarExpediente(id: number): void {
     this.loading = true;
     this.api.getExpediente(id).subscribe({
@@ -71,6 +76,9 @@ export class ExpedienteComponent implements OnInit {
         this.loading = false;
         this.buildSlots();
         this.cdr.markForCheck();
+        if (this.hayDocumentosProcesandose()) {
+          this.iniciarPolling();
+        }
       },
       error: (err) => {
         this.error = err.error?.detail || 'Expediente no encontrado';
@@ -173,6 +181,7 @@ export class ExpedienteComponent implements OnInit {
         slot.archivo = null;
         this.cdr.markForCheck();
         this.recargarExpediente();
+        this.iniciarPolling();
       },
       error: (err) => {
         const message = err.error?.detail || err.message || 'Error al subir archivo';
@@ -184,8 +193,44 @@ export class ExpedienteComponent implements OnInit {
     });
   }
 
+  private iniciarPolling(): void {
+    if (this.pollingInterval) return;
+    this.pollingInterval = setInterval(() => {
+      if (!this.expediente) return;
+      this.api.getExpediente(this.expediente.id).subscribe({
+        next: (exp) => {
+          this.expediente = exp;
+          this.buildSlots();
+          this.cdr.markForCheck();
+          if (!this.hayDocumentosProcesandose()) {
+            this.detenerPolling();
+          }
+        }
+      });
+    }, 5000);
+  }
+
+  private detenerPolling(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+  }
+
+  hayDocumentosProcesandose(): boolean {
+    if (!this.expediente) return false;
+    return this.expediente.documentos.some(
+      d => d.estado === EstadoDocumento.Subido || d.estado === EstadoDocumento.Procesando
+    );
+  }
+
+  get puedeEvaluar(): boolean {
+    if (!this.expediente?.puedeEvaluar) return false;
+    return !this.hayDocumentosProcesandose();
+  }
+
   evaluar(): void {
-    if (!this.expediente || !this.expediente.puedeEvaluar) return;
+    if (!this.expediente || !this.puedeEvaluar) return;
 
     const dialogRef = this.dialog.open(EvaluarDialogComponent, {
       data: { expedienteId: this.expediente.id },

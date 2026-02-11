@@ -69,12 +69,21 @@ tests/
 - `GET /api/expedientes/tipos-documento` - Lista tipos de documento
 
 ## Flujo de expedientes
-1. **Subir documentos**: POST va a Azure Blob Storage, estado = Subido (4), respuesta JSON instantanea
-2. **Evaluar**: POST SSE descarga cada doc del blob, lo procesa con Content Understanding, aplica reglas crediticias
+1. **Subir documentos**: POST va a Azure Blob Storage, estado = Subido (4), respuesta JSON instantanea. Se encola automaticamente para procesamiento background con Content Understanding.
+2. **Procesamiento background**: `BackgroundDocumentProcessor` (hosted service) consume la cola `Channel<T>`, procesa hasta 3 documentos en paralelo. Estados: Subido -> Procesando -> Procesado/Error. Recovery al reiniciar (re-encola Subido/Procesando).
+3. **Frontend polling**: cada 5s recarga el expediente para ver progreso de procesamiento. Se detiene cuando todos los docs estan Procesado/Error.
+4. **Evaluar**: POST SSE. Si todos los docs ya estan Procesados, solo aplica reglas crediticias (instantaneo). Fallback sincrono para docs que no terminaron de procesar.
    - Eventos SSE: `progress` (JSON ProgresoEvaluacionDto con archivo, paso, detalle, documentoActual, totalDocumentos), `result` (JSON ExpedienteDto), `error` (texto)
    - `detalle` contiene mensajes de polling de Content Understanding (ej: "Analizando estructura...", "Extrayendo texto con OCR...")
    - Soporta cancelacion via CancellationToken/AbortController
    - Retry automatico (1 intento) si falla un documento
+
+## Resiliencia HTTP (Content Understanding)
+- Polly retry: 429 (TooManyRequests), 503 (ServiceUnavailable), 408 (RequestTimeout)
+- Backoff exponencial (2s base) con jitter, max 5 reintentos
+- Respeta header `Retry-After` de Azure (delta o fecha absoluta)
+- `EnsureSuccessAsync`: lee body de error de Azure AI Services antes de lanzar excepcion (mensajes utiles en vez de genericos)
+- Los 500 y otros errores NO se reintentan
 
 ## Datos de prueba (Mock Evaluacion)
 | DNI | RUC | Descripcion |

@@ -105,8 +105,11 @@
                 @if (slot.documento.confianzaPromedio !== null && slot.documento.estado === 2) {
                   - Confianza: {{ slot.documento.confianzaPromedio | percent:'1.0-0' }}
                 }
+                @if (slot.documento.estado === 1) {
+                  - Procesando...
+                }
                 @if (slot.documento.estado === 4) {
-                  - Pendiente de procesamiento
+                  - En cola
                 }
               } @else {
                 Sin documento
@@ -119,6 +122,19 @@
               <p class="tipo-descripcion">{{ slot.tipo.descripcion }}</p>
             }
 
+            <!-- Documento en procesamiento background -->
+            @if (slot.documento && slot.documento.estado === 1) {
+              <div class="doc-resumen doc-procesando">
+                <div class="doc-info">
+                  <mat-spinner diameter="20"></mat-spinner>
+                  <div>
+                    <strong>{{ slot.documento.nombreArchivo }}</strong>
+                    <span class="doc-fecha">Procesando con IA...</span>
+                  </div>
+                </div>
+              </div>
+            }
+
             <!-- Documento subido (pendiente de procesamiento) -->
             @if (slot.documento && slot.documento.estado === 4) {
               <div class="doc-resumen doc-subido">
@@ -126,7 +142,7 @@
                   <mat-icon class="estado-subido">cloud_done</mat-icon>
                   <div>
                     <strong>{{ slot.documento.nombreArchivo }}</strong>
-                    <span class="doc-fecha">Subido: {{ slot.documento.fechaProcesado | date:'dd/MM/yyyy HH:mm' }}</span>
+                    <span class="doc-fecha">En cola de procesamiento...</span>
                   </div>
                 </div>
                 <div class="doc-actions">
@@ -230,15 +246,19 @@
         }
         <button mat-raised-button color="primary"
                 class="evaluar-btn"
-                [disabled]="!expediente.puedeEvaluar"
+                [disabled]="!puedeEvaluar"
                 (click)="evaluar()"
-                [matTooltip]="!expediente.puedeEvaluar ? 'Complete todos los documentos obligatorios para evaluar' : ''">
+                [matTooltip]="!puedeEvaluar ? (hayDocumentosProcesandose() ? 'Espere a que terminen de procesarse los documentos' : 'Complete todos los documentos obligatorios para evaluar') : ''">
           <ng-container>
             <mat-icon>gavel</mat-icon>
             Evaluar Expediente
           </ng-container>
         </button>
-        @if (!expediente.puedeEvaluar) {
+        @if (hayDocumentosProcesandose()) {
+          <p class="evaluar-hint">
+            Procesando documentos con IA, espere un momento...
+          </p>
+        } @else if (!expediente.puedeEvaluar) {
           <p class="evaluar-hint">
             Faltan {{ expediente.totalDocumentosObligatorios - expediente.documentosObligatoriosCompletos }}
             documento(s) obligatorio(s) por subir

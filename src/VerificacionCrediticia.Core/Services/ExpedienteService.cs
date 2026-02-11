@@ -12,9 +12,10 @@ public class ExpedienteService : IExpedienteService
     private readonly IExpedienteRepository _expedienteRepo;
     private readonly IDocumentoProcesadoRepository _documentoRepo;
     private readonly ITipoDocumentoRepository _tipoDocumentoRepo;
-    private readonly IDocumentIntelligenceService _documentIntelligence;
+    private readonly IDocumentProcessingService _processingService;
     private readonly IMotorReglasService _motorReglas;
     private readonly IBlobStorageService _blobStorage;
+    private readonly IDocumentProcessingQueue _processingQueue;
     private readonly ILogger<ExpedienteService> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -27,17 +28,19 @@ public class ExpedienteService : IExpedienteService
         IExpedienteRepository expedienteRepo,
         IDocumentoProcesadoRepository documentoRepo,
         ITipoDocumentoRepository tipoDocumentoRepo,
-        IDocumentIntelligenceService documentIntelligence,
+        IDocumentProcessingService processingService,
         IMotorReglasService motorReglas,
         IBlobStorageService blobStorage,
+        IDocumentProcessingQueue processingQueue,
         ILogger<ExpedienteService> logger)
     {
         _expedienteRepo = expedienteRepo;
         _documentoRepo = documentoRepo;
         _tipoDocumentoRepo = tipoDocumentoRepo;
-        _documentIntelligence = documentIntelligence;
+        _processingService = processingService;
         _motorReglas = motorReglas;
         _blobStorage = blobStorage;
+        _processingQueue = processingQueue;
         _logger = logger;
     }
 
@@ -163,7 +166,11 @@ public class ExpedienteService : IExpedienteService
             await _expedienteRepo.UpdateAsync(expediente);
         }
 
-        _logger.LogInformation("Documento {CodigoTipo} subido a blob para expediente {ExpId}: {BlobUri}",
+        // Encolar para procesamiento en background
+        await _processingQueue.EnqueueAsync(new DocumentoProcesarMessage(
+            expedienteId, documento.Id, codigoTipo, blobUri, fileName));
+
+        _logger.LogInformation("Documento {CodigoTipo} subido a blob y encolado para expediente {ExpId}: {BlobUri}",
             codigoTipo, expedienteId, blobUri);
 
         return new DocumentoProcesadoResumenDto
@@ -209,100 +216,109 @@ public class ExpedienteService : IExpedienteService
         IProgress<ProgresoEvaluacionDto>? progreso = null,
         CancellationToken cancellationToken = default)
     {
-        // Usar tracking para poder persistir cambios (documentos + resultado evaluacion)
+        // Lectura sin tracking para verificar estado inicial
+        var expedienteSnapshot = await _expedienteRepo.GetByIdWithDocumentosAsync(expedienteId)
+            ?? throw new KeyNotFoundException($"Expediente {expedienteId} no encontrado");
+
+        // Documentos que aun no estan procesados
+        var totalPendientes = expedienteSnapshot.Documentos
+            .Count(d => d.Estado == EstadoDocumento.Subido || d.Estado == EstadoDocumento.Procesando);
+
+        var errores = new List<string>();
+
+        if (totalPendientes > 0)
+        {
+            progreso?.Report(new ProgresoEvaluacionDto
+            {
+                Archivo = "",
+                Paso = $"Esperando procesamiento de {totalPendientes} documento(s)...",
+                DocumentoActual = 0,
+                TotalDocumentos = totalPendientes
+            });
+
+            // Esperar a que el background processor termine (polling con AsNoTracking)
+            var maxEspera = TimeSpan.FromMinutes(5);
+            var inicio = DateTime.UtcNow;
+            var docIndex = 0;
+
+            while (DateTime.UtcNow - inicio < maxEspera)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Delay(2000, cancellationToken);
+
+                // AsNoTracking: ve los cambios reales de la BD hechos por el background processor
+                var snapshot = await _expedienteRepo.GetByIdWithDocumentosAsync(expedienteId);
+                if (snapshot == null) break;
+
+                var pendientes = snapshot.Documentos
+                    .Count(d => d.Estado == EstadoDocumento.Subido || d.Estado == EstadoDocumento.Procesando);
+
+                var procesados = totalPendientes - pendientes;
+                if (procesados > docIndex)
+                {
+                    docIndex = procesados;
+                    progreso?.Report(new ProgresoEvaluacionDto
+                    {
+                        Archivo = "",
+                        Paso = $"Procesados {procesados} de {totalPendientes} documento(s)...",
+                        DocumentoActual = procesados,
+                        TotalDocumentos = totalPendientes
+                    });
+                }
+
+                if (pendientes == 0) break;
+            }
+        }
+
+        // Re-leer con tracking para persistir cambios (fallback + reglas)
         var expediente = await _expedienteRepo.GetByIdWithDocumentosTrackingAsync(expedienteId)
             ?? throw new KeyNotFoundException($"Expediente {expedienteId} no encontrado");
 
-        // Obtener documentos pendientes de procesamiento (Subido)
-        var documentosSubidos = expediente.Documentos
+        // Fallback sincrono: si aun quedan docs en Subido, procesarlos aqui
+        var docsSubidos = expediente.Documentos
             .Where(d => d.Estado == EstadoDocumento.Subido)
             .ToList();
 
-        var totalDocumentos = documentosSubidos.Count;
-        var errores = new List<string>();
-
-        // Procesar cada documento con Content Understanding
-        for (var i = 0; i < documentosSubidos.Count; i++)
+        for (var i = 0; i < docsSubidos.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var doc = documentosSubidos[i];
+            var doc = docsSubidos[i];
             var codigoTipo = doc.TipoDocumento?.Codigo ?? "";
-            var docIndex = i + 1;
+            var idx = i + 1;
 
             progreso?.Report(new ProgresoEvaluacionDto
             {
                 Archivo = doc.NombreArchivo,
-                Paso = $"Descargando {doc.NombreArchivo}...",
-                DocumentoActual = docIndex,
-                TotalDocumentos = totalDocumentos
+                Paso = $"Procesando (fallback): {doc.TipoDocumento?.Nombre ?? codigoTipo}...",
+                DocumentoActual = idx,
+                TotalDocumentos = docsSubidos.Count
             });
 
             try
             {
-                // Descargar del blob
-                using var stream = await _blobStorage.DownloadAsync(doc.BlobUri!);
-
-                progreso?.Report(new ProgresoEvaluacionDto
-                {
-                    Archivo = doc.NombreArchivo,
-                    Paso = $"Procesando con IA: {doc.TipoDocumento?.Nombre ?? codigoTipo}...",
-                    DocumentoActual = docIndex,
-                    TotalDocumentos = totalDocumentos
-                });
-
-                // Actualizar estado a Procesando
-                doc.Estado = EstadoDocumento.Procesando;
-                await _documentoRepo.UpdateAsync(doc);
-
-                // Crear adaptador de progreso: mensajes de polling de CU -> ProgresoEvaluacionDto
-                IProgress<string>? progresoDetalle = progreso != null
-                    ? new Progress<string>(mensaje => progreso.Report(new ProgresoEvaluacionDto
-                    {
-                        Archivo = doc.NombreArchivo,
-                        Paso = $"Procesando con IA: {doc.TipoDocumento?.Nombre ?? codigoTipo}...",
-                        Detalle = mensaje,
-                        DocumentoActual = docIndex,
-                        TotalDocumentos = totalDocumentos
-                    }))
-                    : null;
-
-                // Procesar con Content Understanding
-                var resultado = await ProcesarConReintento(codigoTipo, stream, doc.NombreArchivo, docIndex, totalDocumentos, progreso, progresoDetalle, cancellationToken);
-
-                // Guardar resultado
-                doc.DatosExtraidosJson = JsonSerializer.Serialize(resultado, JsonOptions);
-                doc.Estado = EstadoDocumento.Procesado;
-                doc.ConfianzaPromedio = ObtenerConfianzaDeResultado(resultado);
-                doc.ErrorMensaje = null;
-                await _documentoRepo.UpdateAsync(doc);
-
-                // Actualizar datos del expediente
-                await ActualizarDatosExpedienteAsync(expediente, codigoTipo, resultado);
-
-                progreso?.Report(new ProgresoEvaluacionDto
-                {
-                    Archivo = doc.NombreArchivo,
-                    Paso = "Documento procesado correctamente",
-                    DocumentoActual = docIndex,
-                    TotalDocumentos = totalDocumentos
-                });
+                await ProcesarDocumentoSincrono(doc, codigoTipo, expediente, idx, docsSubidos.Count, progreso, cancellationToken);
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error procesando documento {DocId} ({Tipo}) del expediente {ExpId}",
+                _logger.LogError(ex, "Error procesando (fallback) documento {DocId} ({Tipo}) del expediente {ExpId}",
                     doc.Id, codigoTipo, expedienteId);
-
                 doc.Estado = EstadoDocumento.Error;
                 doc.ErrorMensaje = ex.Message;
                 await _documentoRepo.UpdateAsync(doc);
-
                 errores.Add($"{doc.NombreArchivo}: {ex.Message}");
             }
+        }
+
+        // Verificar docs en Procesando (background no termino)
+        var docsEnProceso = expediente.Documentos
+            .Where(d => d.Estado == EstadoDocumento.Procesando)
+            .ToList();
+
+        if (docsEnProceso.Count > 0)
+        {
+            errores.Add($"{docsEnProceso.Count} documento(s) aun en procesamiento");
         }
 
         // Si hubo errores, lanzar excepcion con resumen
@@ -330,12 +346,13 @@ public class ExpedienteService : IExpedienteService
                 $"Faltan documentos obligatorios: {string.Join(", ", faltantes)}");
         }
 
+        var totalDocs = expediente.Documentos.Count;
         progreso?.Report(new ProgresoEvaluacionDto
         {
             Archivo = "",
             Paso = "Evaluando reglas crediticias...",
-            DocumentoActual = totalDocumentos,
-            TotalDocumentos = totalDocumentos
+            DocumentoActual = totalDocs,
+            TotalDocumentos = totalDocs
         });
 
         // Extraer datos y ejecutar motor de reglas
@@ -404,7 +421,7 @@ public class ExpedienteService : IExpedienteService
     {
         try
         {
-            return await ProcesarSegunTipoAsync(codigoTipo, stream, fileName, cancellationToken, progresoDetalle);
+            return await _processingService.ProcesarSegunTipoAsync(codigoTipo, stream, fileName, cancellationToken, progresoDetalle);
         }
         catch (OperationCanceledException)
         {
@@ -430,112 +447,41 @@ public class ExpedienteService : IExpedienteService
                 stream.Position = 0;
             }
 
-            return await ProcesarSegunTipoAsync(codigoTipo, stream, fileName, cancellationToken, progresoDetalle);
+            return await _processingService.ProcesarSegunTipoAsync(codigoTipo, stream, fileName, cancellationToken, progresoDetalle);
         }
     }
 
-    private async Task<object> ProcesarSegunTipoAsync(
-        string codigoTipo, Stream documentStream, string fileName,
-        CancellationToken cancellationToken = default,
-        IProgress<string>? progreso = null)
+    private async Task ProcesarDocumentoSincrono(
+        DocumentoProcesado doc, string codigoTipo, Expediente expediente,
+        int docIndex, int totalDocumentos,
+        IProgress<ProgresoEvaluacionDto>? progreso,
+        CancellationToken cancellationToken)
     {
-        return codigoTipo switch
-        {
-            "DNI" => await _documentIntelligence.ProcesarDocumentoIdentidadAsync(documentStream, fileName, cancellationToken),
-            "VIGENCIA_PODER" => await _documentIntelligence.ProcesarVigenciaPoderAsync(documentStream, fileName, cancellationToken, progreso),
-            "BALANCE_GENERAL" => await _documentIntelligence.ProcesarBalanceGeneralAsync(documentStream, fileName, cancellationToken, progreso),
-            "ESTADO_RESULTADOS" => await _documentIntelligence.ProcesarEstadoResultadosAsync(documentStream, fileName, cancellationToken, progreso),
-            "FICHA_RUC" => await _documentIntelligence.ProcesarFichaRucAsync(documentStream, fileName, cancellationToken, progreso),
-            _ => throw new NotSupportedException($"Tipo de documento '{codigoTipo}' no tiene procesamiento implementado")
-        };
-    }
+        using var stream = await _blobStorage.DownloadAsync(doc.BlobUri!);
 
-    private async Task ActualizarDatosExpedienteAsync(Expediente expediente, string codigoTipo, object resultado)
-    {
-        bool actualizado = false;
+        doc.Estado = EstadoDocumento.Procesando;
+        await _documentoRepo.UpdateAsync(doc);
 
-        if (codigoTipo == "DNI" && resultado is DocumentoIdentidadDto dni)
-        {
-            if (string.IsNullOrEmpty(expediente.DniSolicitante) && !string.IsNullOrEmpty(dni.NumeroDocumento))
+        IProgress<string>? progresoDetalle = progreso != null
+            ? new Progress<string>(mensaje => progreso.Report(new ProgresoEvaluacionDto
             {
-                expediente.DniSolicitante = dni.NumeroDocumento;
-                actualizado = true;
-            }
-            if (string.IsNullOrEmpty(expediente.NombresSolicitante) && !string.IsNullOrEmpty(dni.Nombres))
-            {
-                expediente.NombresSolicitante = dni.Nombres;
-                actualizado = true;
-            }
-            if (string.IsNullOrEmpty(expediente.ApellidosSolicitante) && !string.IsNullOrEmpty(dni.Apellidos))
-            {
-                expediente.ApellidosSolicitante = dni.Apellidos;
-                actualizado = true;
-            }
-        }
+                Archivo = doc.NombreArchivo,
+                Paso = $"Procesando con IA: {doc.TipoDocumento?.Nombre ?? codigoTipo}...",
+                Detalle = mensaje,
+                DocumentoActual = docIndex,
+                TotalDocumentos = totalDocumentos
+            }))
+            : null;
 
-        if (codigoTipo == "VIGENCIA_PODER" && resultado is VigenciaPoderDto vigencia)
-        {
-            if (string.IsNullOrEmpty(expediente.RazonSocialEmpresa) && !string.IsNullOrEmpty(vigencia.RazonSocial))
-            {
-                expediente.RazonSocialEmpresa = vigencia.RazonSocial;
-                actualizado = true;
-            }
-            if (string.IsNullOrEmpty(expediente.RucEmpresa) && !string.IsNullOrEmpty(vigencia.Ruc))
-            {
-                expediente.RucEmpresa = vigencia.Ruc;
-                actualizado = true;
-            }
-        }
+        var resultado = await ProcesarConReintento(codigoTipo, stream, doc.NombreArchivo, docIndex, totalDocumentos, progreso, progresoDetalle, cancellationToken);
 
-        if (codigoTipo == "BALANCE_GENERAL" && resultado is BalanceGeneralDto balance)
-        {
-            if (string.IsNullOrEmpty(expediente.RazonSocialEmpresa) && !string.IsNullOrEmpty(balance.RazonSocial))
-            {
-                expediente.RazonSocialEmpresa = balance.RazonSocial;
-                actualizado = true;
-            }
-        }
+        doc.DatosExtraidosJson = JsonSerializer.Serialize(resultado, JsonOptions);
+        doc.Estado = EstadoDocumento.Procesado;
+        doc.ConfianzaPromedio = _processingService.ObtenerConfianzaDeResultado(resultado);
+        doc.ErrorMensaje = null;
+        await _documentoRepo.UpdateAsync(doc);
 
-        if (codigoTipo == "ESTADO_RESULTADOS" && resultado is EstadoResultadosDto estadoRes)
-        {
-            if (string.IsNullOrEmpty(expediente.RazonSocialEmpresa) && !string.IsNullOrEmpty(estadoRes.RazonSocial))
-            {
-                expediente.RazonSocialEmpresa = estadoRes.RazonSocial;
-                actualizado = true;
-            }
-        }
-
-        if (codigoTipo == "FICHA_RUC" && resultado is FichaRucDto fichaRuc)
-        {
-            if (string.IsNullOrEmpty(expediente.RucEmpresa) && !string.IsNullOrEmpty(fichaRuc.Ruc))
-            {
-                expediente.RucEmpresa = fichaRuc.Ruc;
-                actualizado = true;
-            }
-            if (string.IsNullOrEmpty(expediente.RazonSocialEmpresa) && !string.IsNullOrEmpty(fichaRuc.RazonSocial))
-            {
-                expediente.RazonSocialEmpresa = fichaRuc.RazonSocial;
-                actualizado = true;
-            }
-        }
-
-        if (actualizado)
-        {
-            await _expedienteRepo.UpdateAsync(expediente);
-        }
-    }
-
-    private static decimal? ObtenerConfianzaDeResultado(object resultado)
-    {
-        return resultado switch
-        {
-            DocumentoIdentidadDto dni => (decimal)dni.ConfianzaPromedio,
-            VigenciaPoderDto vp => (decimal)vp.ConfianzaPromedio,
-            BalanceGeneralDto bg => (decimal)bg.ConfianzaPromedio,
-            EstadoResultadosDto er => er.ConfianzaPromedio,
-            FichaRucDto fr => (decimal)fr.ConfianzaPromedio,
-            _ => null
-        };
+        await _processingService.ActualizarDatosExpedienteAsync(expediente, codigoTipo, resultado);
     }
 
     private Dictionary<string, object> ExtraerDatosParaEvaluacion(Expediente expediente)

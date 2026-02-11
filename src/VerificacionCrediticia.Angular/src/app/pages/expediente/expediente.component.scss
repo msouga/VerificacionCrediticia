@@ -262,6 +262,22 @@ mat-expansion-panel {
   margin-bottom: 12px;
 }
 
+// Procesando
+.doc-procesando {
+  border-left: 3px solid #ff9800;
+  background: #fff3e0;
+
+  .doc-info {
+    mat-spinner {
+      margin-right: 4px;
+    }
+
+    .doc-fecha {
+      color: #e65100;
+    }
+  }
+}
+
 // Subido
 .doc-subido {
   border-left: 3px solid #1976d2;

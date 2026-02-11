@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -33,6 +34,37 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _settings.ApiKey);
     }
 
+    private async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct = default)
+    {
+        if (response.IsSuccessStatusCode) return;
+
+        string detalle;
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            // Azure AI Services devuelve JSON: {"error":{"code":"...","message":"..."}}
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var errorObj)
+                && errorObj.TryGetProperty("message", out var msgProp))
+            {
+                var code = errorObj.TryGetProperty("code", out var codeProp) ? codeProp.GetString() : null;
+                detalle = code != null ? $"{code}: {msgProp.GetString()}" : msgProp.GetString() ?? body;
+            }
+            else
+            {
+                detalle = body.Length > 500 ? body[..500] : body;
+            }
+        }
+        catch
+        {
+            detalle = response.ReasonPhrase ?? "Sin detalle";
+        }
+
+        var mensaje = $"Content Understanding respondio {(int)response.StatusCode} ({response.StatusCode}): {detalle}";
+        _logger.LogError("Error HTTP de Content Understanding: {Mensaje}", mensaje);
+        throw new HttpRequestException(mensaje, null, response.StatusCode);
+    }
+
     public async Task<DocumentoIdentidadDto> ProcesarDocumentoIdentidadAsync(
         Stream documentStream,
         string nombreArchivo,
@@ -52,7 +84,7 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         var response = await _httpClient.PostAsync(analyzeUrl, content, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken);
 
         // Obtener Operation-Location para polling
         if (!response.Headers.TryGetValues("Operation-Location", out var operationLocations))
@@ -103,7 +135,7 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         var response = await _httpClient.PostAsync(analyzeUrl, content, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken);
 
         if (!response.Headers.TryGetValues("Operation-Location", out var operationLocations))
         {
@@ -202,7 +234,7 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         var response = await _httpClient.PostAsync(analyzeUrl, content, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken);
 
         if (!response.Headers.TryGetValues("Operation-Location", out var operationLocations))
         {
@@ -425,7 +457,7 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
             progreso?.Report($"{mensajes[mensajeIndex]} ({elapsed}s)");
 
             var response = await _httpClient.GetAsync(resultUrl, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            await EnsureSuccessAsync(response, cancellationToken);
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
             var result = JsonSerializer.Deserialize<AnalyzeResultResponse>(json, JsonOptions);
@@ -548,7 +580,7 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         var response = await _httpClient.PostAsync(analyzeUrl, content, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken);
 
         if (!response.Headers.TryGetValues("Operation-Location", out var operationLocations))
         {
@@ -630,7 +662,7 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         var response = await _httpClient.PostAsync(analyzeUrl, content, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken);
 
         if (!response.Headers.TryGetValues("Operation-Location", out var operationLocations))
         {
