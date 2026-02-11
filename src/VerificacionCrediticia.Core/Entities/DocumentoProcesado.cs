@@ -8,7 +8,7 @@ public class DocumentoProcesado
 
     public int ExpedienteId { get; set; }
 
-    public int TipoDocumentoId { get; set; }
+    public int? TipoDocumentoId { get; set; }
 
     public string NombreArchivo { get; set; } = string.Empty;
 
@@ -26,5 +26,5 @@ public class DocumentoProcesado
 
     // Navegacion
     public virtual Expediente Expediente { get; set; } = null!;
-    public virtual TipoDocumento TipoDocumento { get; set; } = null!;
+    public virtual TipoDocumento? TipoDocumento { get; set; }
 }

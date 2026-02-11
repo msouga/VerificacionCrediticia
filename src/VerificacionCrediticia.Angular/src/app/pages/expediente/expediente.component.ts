@@ -51,6 +51,11 @@ export class ExpedienteComponent implements OnInit, OnDestroy {
 
   documentoSlots: DocumentoSlot[] = [];
 
+  // Carga masiva
+  bulkDragOver = false;
+  bulkLoading = false;
+  bulkError: string | null = null;
+
   private extensionesPermitidas = ['.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff'];
   private tamanoMaximoMb = 4;
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
@@ -251,6 +256,78 @@ export class ExpedienteComponent implements OnInit, OnDestroy {
 
   volverAListado(): void {
     this.router.navigate(['/expedientes']);
+  }
+
+  // Carga masiva: drag & drop
+  onBulkDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.bulkDragOver = true;
+    this.cdr.markForCheck();
+  }
+
+  onBulkDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    this.bulkDragOver = false;
+    this.cdr.markForCheck();
+  }
+
+  onBulkDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.bulkDragOver = false;
+    if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+      this.subirArchivosBulk(Array.from(event.dataTransfer.files));
+    }
+  }
+
+  onBulkFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.subirArchivosBulk(Array.from(input.files));
+      input.value = '';
+    }
+  }
+
+  private subirArchivosBulk(archivos: File[]): void {
+    if (!this.expediente || archivos.length === 0) return;
+
+    this.bulkError = null;
+
+    // Validar todos los archivos
+    for (const archivo of archivos) {
+      const extension = '.' + archivo.name.split('.').pop()?.toLowerCase();
+      if (!this.extensionesPermitidas.includes(extension)) {
+        this.bulkError = `${archivo.name}: formato no soportado. Permitidos: ${this.extensionesPermitidas.join(', ')}`;
+        this.cdr.markForCheck();
+        return;
+      }
+      if (archivo.size > this.tamanoMaximoMb * 1024 * 1024) {
+        this.bulkError = `${archivo.name}: excede el limite de ${this.tamanoMaximoMb} MB`;
+        this.cdr.markForCheck();
+        return;
+      }
+    }
+
+    this.bulkLoading = true;
+    this.cdr.markForCheck();
+
+    this.api.subirDocumentosBulk(this.expediente.id, archivos).subscribe({
+      next: () => {
+        this.bulkLoading = false;
+        this.cdr.markForCheck();
+        this.recargarExpediente();
+        this.iniciarPolling();
+      },
+      error: (err) => {
+        this.bulkError = err.error?.detail || err.message || 'Error al subir archivos';
+        this.bulkLoading = false;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  get documentosEnClasificacion(): DocumentoProcesadoResumen[] {
+    if (!this.expediente) return [];
+    return this.expediente.documentos.filter(d => d.tipoDocumentoId === null);
   }
 
   // Helpers de estado

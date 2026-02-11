@@ -122,6 +122,113 @@
   }
 }
 
+// Carga masiva
+.bulk-upload-card {
+  .bulk-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+
+    > mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: #1976d2;
+      margin-top: 2px;
+    }
+
+    h3 {
+      margin: 0 0 4px 0;
+      font-size: 1rem;
+    }
+
+    p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: rgba(0, 0, 0, 0.54);
+    }
+  }
+}
+
+.bulk-upload-zone {
+  position: relative;
+  border: 2px dashed #90caf9;
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f5f9ff;
+
+  &:hover, &.drag-over {
+    border-color: #1976d2;
+    background: #e3f2fd;
+  }
+
+  &.has-error {
+    border-color: #f44336;
+  }
+
+  .file-input-hidden {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .upload-icon {
+    font-size: 36px;
+    width: 36px;
+    height: 36px;
+    color: #1976d2;
+  }
+
+  p {
+    margin: 8px 0 4px;
+    color: rgba(0, 0, 0, 0.7);
+    font-size: 0.9rem;
+  }
+
+  .upload-hint {
+    font-size: 0.8rem;
+    color: rgba(0, 0, 0, 0.4);
+  }
+}
+
+.clasificando-card {
+  h3 {
+    margin: 0 0 12px 0;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.doc-clasificando {
+  border-left: 3px solid #ff9800;
+  background: #fff3e0;
+  margin-bottom: 8px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  .doc-info {
+    mat-spinner {
+      margin-right: 4px;
+    }
+
+    .doc-fecha {
+      color: #e65100;
+    }
+  }
+}
+
 // Accordion documentos
 mat-expansion-panel {
   mat-panel-title {

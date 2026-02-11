@@ -99,6 +99,7 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(d => d.TipoDocumento)
                 .WithMany(t => t.DocumentosProcesados)
                 .HasForeignKey(d => d.TipoDocumentoId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_DocumentosProcesados_TipoDocumento");
         });

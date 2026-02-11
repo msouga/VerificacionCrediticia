@@ -118,6 +118,21 @@ export class VerificacionApiService {
     );
   }
 
+  // Upload masivo (sin SSE) - sube multiples archivos para clasificacion automatica
+  subirDocumentosBulk(
+    expedienteId: number,
+    archivos: File[]
+  ): Observable<DocumentoProcesadoResumen[]> {
+    const formData = new FormData();
+    for (const archivo of archivos) {
+      formData.append('archivos', archivo, archivo.name);
+    }
+    return this.http.post<DocumentoProcesadoResumen[]>(
+      `${this.baseUrl}/api/expedientes/${expedienteId}/documentos/bulk`,
+      formData
+    );
+  }
+
   // Reemplazar documento (sin SSE) - solo reemplaza archivo en blob
   reemplazarDocumento(
     expedienteId: number,

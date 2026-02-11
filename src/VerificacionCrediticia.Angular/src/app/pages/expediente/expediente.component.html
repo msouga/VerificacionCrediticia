@@ -81,6 +81,78 @@
       </mat-card-content>
     </mat-card>
 
+    <!-- Zona de carga masiva -->
+    <mat-card class="bulk-upload-card">
+      <mat-card-content>
+        <div class="bulk-header">
+          <mat-icon>dynamic_feed</mat-icon>
+          <div>
+            <h3>Carga masiva de documentos</h3>
+            <p>Suba todos los documentos juntos. El sistema los clasificara automaticamente.</p>
+          </div>
+        </div>
+        <div class="bulk-upload-zone"
+             [class.drag-over]="bulkDragOver"
+             [class.has-error]="bulkError"
+             (dragover)="onBulkDragOver($event)"
+             (dragleave)="onBulkDragLeave($event)"
+             (drop)="onBulkDrop($event)">
+          <input type="file"
+                 class="file-input-hidden"
+                 multiple
+                 accept=".pdf,.jpg,.jpeg,.png,.bmp,.tiff"
+                 (change)="onBulkFileSelected($event)">
+          <mat-icon class="upload-icon">cloud_upload</mat-icon>
+          <p>Arrastre archivos aqui o haga clic para seleccionar</p>
+          <span class="upload-hint">Multiples archivos PDF, JPG, PNG, BMP o TIFF - Max 4 MB c/u</span>
+        </div>
+        @if (bulkLoading) {
+          <div class="subiendo-info">
+            <mat-spinner diameter="20"></mat-spinner>
+            <span>Subiendo archivos...</span>
+          </div>
+        }
+        @if (bulkError) {
+          <div class="slot-error">
+            <mat-icon>warning</mat-icon>
+            <span>{{ bulkError }}</span>
+          </div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Documentos en clasificacion -->
+    @if (documentosEnClasificacion.length > 0) {
+      <mat-card class="clasificando-card">
+        <mat-card-content>
+          <h3>Clasificando documentos...</h3>
+          @for (doc of documentosEnClasificacion; track doc.id) {
+            <div class="doc-resumen doc-clasificando">
+              <div class="doc-info">
+                @if (doc.estado === 1) {
+                  <mat-spinner diameter="20"></mat-spinner>
+                } @else {
+                  <mat-icon class="estado-subido">cloud_done</mat-icon>
+                }
+                <div>
+                  <strong>{{ doc.nombreArchivo }}</strong>
+                  <span class="doc-fecha">
+                    @if (doc.estado === 1) {
+                      Clasificando con IA...
+                    } @else if (doc.estado === 3) {
+                      Error: {{ doc.errorMensaje || 'Error desconocido' }}
+                    } @else {
+                      En cola de clasificacion...
+                    }
+                  </span>
+                </div>
+              </div>
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+
     <!-- Lista de documentos -->
     <mat-accordion multi>
       @for (slot of documentoSlots; track slot.tipo.id) {

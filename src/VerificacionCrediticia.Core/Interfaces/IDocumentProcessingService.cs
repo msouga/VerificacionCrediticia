@@ -12,4 +12,9 @@ public interface IDocumentProcessingService
     Task ActualizarDatosExpedienteAsync(Expediente expediente, string codigoTipo, object resultado);
 
     decimal? ObtenerConfianzaDeResultado(object resultado);
+
+    Task<(string CodigoTipoDetectado, object Resultado, decimal? Confianza)> ClasificarYProcesarAutoAsync(
+        Stream documentStream, string fileName,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null);
 }

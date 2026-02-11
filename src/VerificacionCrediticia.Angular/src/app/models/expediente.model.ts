@@ -46,7 +46,7 @@ export interface TipoDocumento {
 
 export interface DocumentoProcesadoResumen {
   id: number;
-  tipoDocumentoId: number;
+  tipoDocumentoId: number | null;
   codigoTipoDocumento: string;
   nombreTipoDocumento: string;
   nombreArchivo: string;

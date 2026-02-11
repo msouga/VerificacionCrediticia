@@ -140,6 +140,32 @@ public class DocumentProcessingService : IDocumentProcessingService
         }
     }
 
+    public async Task<(string CodigoTipoDetectado, object Resultado, decimal? Confianza)> ClasificarYProcesarAutoAsync(
+        Stream documentStream, string fileName,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
+    {
+        var clasificacion = await _documentIntelligence.ClasificarYProcesarAsync(
+            documentStream, fileName, cancellationToken, progreso);
+
+        var categoriaDetectada = clasificacion.CategoriaDetectada;
+
+        if (categoriaDetectada == "other")
+        {
+            throw new InvalidOperationException(
+                "El documento no corresponde a ningun tipo conocido. Suba un documento valido.");
+        }
+
+        if (clasificacion.ResultadoExtraccion == null)
+        {
+            throw new InvalidOperationException(
+                $"El clasificador detecto el tipo ({categoriaDetectada}) pero no pudo extraer campos del documento.");
+        }
+
+        var confianza = ObtenerConfianzaDeResultado(clasificacion.ResultadoExtraccion);
+        return (categoriaDetectada, clasificacion.ResultadoExtraccion, confianza);
+    }
+
     public decimal? ObtenerConfianzaDeResultado(object resultado)
     {
         return resultado switch

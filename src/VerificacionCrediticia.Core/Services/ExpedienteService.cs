@@ -67,8 +67,8 @@ public class ExpedienteService : IExpedienteService
         var resumen = items.Select(exp =>
         {
             var docsProcesados = exp.Documentos
-                .Where(d => d.Estado == EstadoDocumento.Procesado)
-                .Select(d => d.TipoDocumentoId)
+                .Where(d => d.Estado == EstadoDocumento.Procesado && d.TipoDocumentoId.HasValue)
+                .Select(d => d.TipoDocumentoId!.Value)
                 .ToHashSet();
 
             return new ExpedienteResumenDto
@@ -331,8 +331,8 @@ public class ExpedienteService : IExpedienteService
         // Verificar que todos los obligatorios esten procesados (ya tenemos el expediente trackeado)
         var tiposObligatorios = await _tipoDocumentoRepo.GetObligatoriosAsync();
         var docsProcesados = expediente.Documentos
-            .Where(d => d.Estado == EstadoDocumento.Procesado)
-            .Select(d => d.TipoDocumentoId)
+            .Where(d => d.Estado == EstadoDocumento.Procesado && d.TipoDocumentoId.HasValue)
+            .Select(d => d.TipoDocumentoId!.Value)
             .ToHashSet();
 
         var faltantes = tiposObligatorios
@@ -408,6 +408,69 @@ public class ExpedienteService : IExpedienteService
             Orden = t.Orden,
             Descripcion = t.Descripcion
         }).ToList();
+    }
+
+    public async Task<List<DocumentoProcesadoResumenDto>> SubirDocumentosBulkAsync(
+        int expedienteId, List<(Stream Stream, string FileName)> archivos)
+    {
+        var expediente = await _expedienteRepo.GetByIdWithDocumentosAsync(expedienteId)
+            ?? throw new KeyNotFoundException($"Expediente {expedienteId} no encontrado");
+
+        var resultados = new List<DocumentoProcesadoResumenDto>();
+
+        foreach (var (stream, fileName) in archivos)
+        {
+            // Subir a blob storage con path AUTO
+            var blobPath = $"documentos/{expedienteId}/AUTO/{Guid.NewGuid()}_{fileName}";
+            var contentType = ObtenerContentType(fileName);
+            var blobUri = await _blobStorage.UploadAsync(blobPath, stream, contentType);
+
+            // Crear registro con TipoDocumentoId = null, estado Subido
+            var documento = new DocumentoProcesado
+            {
+                ExpedienteId = expedienteId,
+                TipoDocumentoId = null,
+                NombreArchivo = fileName,
+                Estado = EstadoDocumento.Subido,
+                FechaProcesado = DateTime.UtcNow,
+                BlobUri = blobUri
+            };
+            documento = await _documentoRepo.CreateAsync(documento);
+
+            // Encolar para procesamiento en background con CodigoTipo = "AUTO"
+            await _processingQueue.EnqueueAsync(new DocumentoProcesarMessage(
+                expedienteId, documento.Id, "AUTO", blobUri, fileName));
+
+            _logger.LogInformation(
+                "Documento bulk subido y encolado para expediente {ExpId}: {FileName} -> {BlobUri}",
+                expedienteId, fileName, blobUri);
+
+            resultados.Add(new DocumentoProcesadoResumenDto
+            {
+                Id = documento.Id,
+                TipoDocumentoId = null,
+                CodigoTipoDocumento = "",
+                NombreTipoDocumento = "Clasificando...",
+                NombreArchivo = documento.NombreArchivo,
+                FechaProcesado = documento.FechaProcesado,
+                Estado = documento.Estado,
+                ConfianzaPromedio = null,
+                ErrorMensaje = null
+            });
+        }
+
+        // Actualizar estado del expediente a EnProceso
+        if (expediente.Estado == EstadoExpediente.Iniciado)
+        {
+            var expTracking = await _expedienteRepo.GetByIdTrackingAsync(expedienteId);
+            if (expTracking != null)
+            {
+                expTracking.Estado = EstadoExpediente.EnProceso;
+                await _expedienteRepo.UpdateAsync(expTracking);
+            }
+        }
+
+        return resultados;
     }
 
     // Metodos privados
@@ -561,8 +624,8 @@ public class ExpedienteService : IExpedienteService
 
         // Considerar tanto Procesado como Subido para el conteo de documentos obligatorios
         var docsListos = expediente.Documentos
-            .Where(d => d.Estado == EstadoDocumento.Procesado || d.Estado == EstadoDocumento.Subido)
-            .Select(d => d.TipoDocumentoId)
+            .Where(d => (d.Estado == EstadoDocumento.Procesado || d.Estado == EstadoDocumento.Subido) && d.TipoDocumentoId.HasValue)
+            .Select(d => d.TipoDocumentoId!.Value)
             .ToHashSet();
 
         var obligatoriosCompletos = tiposObligatorios.Count(t => docsListos.Contains(t.Id));
@@ -591,7 +654,7 @@ public class ExpedienteService : IExpedienteService
                 Id = d.Id,
                 TipoDocumentoId = d.TipoDocumentoId,
                 CodigoTipoDocumento = d.TipoDocumento?.Codigo ?? "",
-                NombreTipoDocumento = d.TipoDocumento?.Nombre ?? "",
+                NombreTipoDocumento = d.TipoDocumento?.Nombre ?? (d.TipoDocumentoId == null ? "Clasificando..." : ""),
                 NombreArchivo = d.NombreArchivo,
                 FechaProcesado = d.FechaProcesado,
                 Estado = d.Estado,

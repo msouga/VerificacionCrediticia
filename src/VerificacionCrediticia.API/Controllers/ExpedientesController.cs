@@ -181,6 +181,86 @@ public class ExpedientesController : ControllerBase
     }
 
     /// <summary>
+    /// Subir multiples documentos al expediente para clasificacion automatica
+    /// </summary>
+    [HttpPost("{id:int}/documentos/bulk")]
+    [ProducesResponseType(typeof(List<DocumentoProcesadoResumenDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<List<DocumentoProcesadoResumenDto>>> SubirDocumentosBulk(
+        int id,
+        [FromForm] List<IFormFile> archivos)
+    {
+        if (archivos == null || archivos.Count == 0)
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Solicitud invalida",
+                Detail = "Debe enviar al menos un archivo",
+                Status = 400
+            });
+
+        // Validar todos los archivos
+        foreach (var archivo in archivos)
+        {
+            var error = ValidarArchivo(archivo);
+            if (error != null)
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Archivo invalido",
+                    Detail = $"{archivo.FileName}: {error}",
+                    Status = 400
+                });
+        }
+
+        _logger.LogInformation(
+            "Subiendo {Count} documentos bulk para expediente {Id}",
+            archivos.Count, id);
+
+        try
+        {
+            var archivosStream = new List<(Stream, string)>();
+            var streams = new List<Stream>();
+            try
+            {
+                foreach (var archivo in archivos)
+                {
+                    var stream = archivo.OpenReadStream();
+                    streams.Add(stream);
+                    archivosStream.Add((stream, archivo.FileName));
+                }
+
+                var resultado = await _expedienteService.SubirDocumentosBulkAsync(id, archivosStream);
+                return Ok(resultado);
+            }
+            finally
+            {
+                foreach (var stream in streams)
+                {
+                    stream.Dispose();
+                }
+            }
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "No encontrado",
+                Detail = ex.Message,
+                Status = 404
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error subiendo documentos bulk para expediente {Id}", id);
+            return StatusCode(500, new ProblemDetails
+            {
+                Title = "Error interno",
+                Detail = "No se pudo subir los documentos",
+                Status = 500
+            });
+        }
+    }
+
+    /// <summary>
     /// Reemplazar un documento existente (solo almacena en blob, no procesa)
     /// </summary>
     [HttpPut("{id:int}/documentos/{documentoId:int}")]

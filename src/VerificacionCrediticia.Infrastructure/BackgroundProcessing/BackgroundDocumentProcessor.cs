@@ -76,10 +76,15 @@ public class BackgroundDocumentProcessor : BackgroundService
                 {
                     if (string.IsNullOrEmpty(doc.BlobUri)) continue;
 
+                    // Si no tiene tipo asignado, re-encolar como AUTO
+                    var codigoTipo = doc.TipoDocumentoId == null
+                        ? "AUTO"
+                        : (doc.TipoDocumento?.Codigo ?? "");
+
                     await _queue.EnqueueAsync(new DocumentoProcesarMessage(
                         doc.ExpedienteId,
                         doc.Id,
-                        doc.TipoDocumento?.Codigo ?? "",
+                        codigoTipo,
                         doc.BlobUri,
                         doc.NombreArchivo), ct);
                 }
@@ -104,6 +109,7 @@ public class BackgroundDocumentProcessor : BackgroundService
             var expedienteRepo = scope.ServiceProvider.GetRequiredService<IExpedienteRepository>();
             var blobStorage = scope.ServiceProvider.GetRequiredService<IBlobStorageService>();
             var processingService = scope.ServiceProvider.GetRequiredService<IDocumentProcessingService>();
+            var tipoDocumentoRepo = scope.ServiceProvider.GetRequiredService<ITipoDocumentoRepository>();
 
             // Verificar que el documento aun existe y esta en estado valido
             var doc = await documentoRepo.GetByIdAsync(message.DocumentoId, ct);
@@ -127,27 +133,75 @@ public class BackgroundDocumentProcessor : BackgroundService
             // Descargar del blob
             using var stream = await blobStorage.DownloadAsync(message.BlobUri);
 
-            // Procesar con Content Understanding (con retry)
+            string codigoTipoFinal;
             object resultado;
-            try
+
+            if (message.CodigoTipo == "AUTO")
             {
-                resultado = await processingService.ProcesarSegunTipoAsync(
-                    message.CodigoTipo, stream, message.NombreArchivo, ct);
+                // Clasificacion automatica: detectar tipo y extraer en una sola llamada
+                (string codigoDetectado, object resultadoAuto, decimal? confianza) autoResult;
+                try
+                {
+                    autoResult = await processingService.ClasificarYProcesarAutoAsync(
+                        stream, message.NombreArchivo, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Primer intento AUTO fallido para doc {DocId}, reintentando...", message.DocumentoId);
+                    if (stream.CanSeek) stream.Position = 0;
+                    autoResult = await processingService.ClasificarYProcesarAutoAsync(
+                        stream, message.NombreArchivo, ct);
+                }
+
+                codigoTipoFinal = autoResult.codigoDetectado;
+                resultado = autoResult.resultadoAuto;
+
+                // Buscar el TipoDocumento por codigo detectado
+                var tipoDocumento = await tipoDocumentoRepo.GetByCodigoAsync(codigoTipoFinal, ct)
+                    ?? throw new InvalidOperationException(
+                        $"Tipo de documento '{codigoTipoFinal}' detectado pero no existe en la configuracion");
+
+                // Verificar conflicto: ya existe un documento procesado de ese tipo en el expediente
+                var expedienteCheck = await expedienteRepo.GetByIdWithDocumentosAsync(message.ExpedienteId);
+                if (expedienteCheck != null)
+                {
+                    var docExistente = expedienteCheck.Documentos.FirstOrDefault(
+                        d => d.TipoDocumentoId == tipoDocumento.Id && d.Id != message.DocumentoId
+                             && d.Estado != EstadoDocumento.Error);
+                    if (docExistente != null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Ya existe un documento de tipo '{tipoDocumento.Nombre}' en el expediente");
+                    }
+                }
+
+                // Asignar tipo al documento
+                doc.TipoDocumentoId = tipoDocumento.Id;
+                doc.ConfianzaPromedio = autoResult.confianza;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            else
             {
-                _logger.LogWarning(ex, "Primer intento fallido para doc {DocId}, reintentando...", message.DocumentoId);
+                // Procesamiento normal por slot
+                codigoTipoFinal = message.CodigoTipo;
+                try
+                {
+                    resultado = await processingService.ProcesarSegunTipoAsync(
+                        message.CodigoTipo, stream, message.NombreArchivo, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Primer intento fallido para doc {DocId}, reintentando...", message.DocumentoId);
+                    if (stream.CanSeek) stream.Position = 0;
+                    resultado = await processingService.ProcesarSegunTipoAsync(
+                        message.CodigoTipo, stream, message.NombreArchivo, ct);
+                }
 
-                if (stream.CanSeek) stream.Position = 0;
-
-                resultado = await processingService.ProcesarSegunTipoAsync(
-                    message.CodigoTipo, stream, message.NombreArchivo, ct);
+                doc.ConfianzaPromedio = processingService.ObtenerConfianzaDeResultado(resultado);
             }
 
             // Guardar resultado
             doc.DatosExtraidosJson = JsonSerializer.Serialize(resultado, JsonOptions);
             doc.Estado = EstadoDocumento.Procesado;
-            doc.ConfianzaPromedio = processingService.ObtenerConfianzaDeResultado(resultado);
             doc.ErrorMensaje = null;
             await documentoRepo.UpdateAsync(doc, ct);
 
@@ -156,12 +210,12 @@ public class BackgroundDocumentProcessor : BackgroundService
             if (expediente != null)
             {
                 await processingService.ActualizarDatosExpedienteAsync(
-                    expediente, message.CodigoTipo, resultado);
+                    expediente, codigoTipoFinal, resultado);
             }
 
             _logger.LogInformation(
                 "Documento {DocId} ({Tipo}) procesado exitosamente en background. Confianza: {Confianza:P0}",
-                message.DocumentoId, message.CodigoTipo, doc.ConfianzaPromedio);
+                message.DocumentoId, codigoTipoFinal, doc.ConfianzaPromedio);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
