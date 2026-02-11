@@ -151,9 +151,9 @@ public class OpenAIVisionService : IDocumentIntelligenceService
         await documentStream.CopyToAsync(memoryStream, cancellationToken);
         var bytes = memoryStream.ToArray();
 
-        // Convertir PDF a imagenes
+        // Convertir documento a imagenes (PDF -> paginas, imagen -> directo)
         var images = PdfToImageConverter.ConvertToBase64Images(
-            bytes, _settings.ImageDpi, _settings.MaxPagesPerDocument, progreso);
+            bytes, _settings.ImageDpi, _settings.MaxPagesPerDocument, progreso, nombreArchivo);
 
         progreso?.Report("Enviando documento a GPT-4.1 Vision...");
 

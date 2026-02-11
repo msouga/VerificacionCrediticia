@@ -65,6 +65,10 @@ public class BlobStorageService : IBlobStorageService
             blobName = blobName.Substring(containerIndex + containerPrefix.Length);
         }
 
+        // AbsolutePath conserva percent-encoding (%20), pero GetBlobClient
+        // re-codifica internamente -> double-encoding. Decodificar primero.
+        blobName = Uri.UnescapeDataString(blobName);
+
         return _containerClient.GetBlobClient(blobName);
     }
 }
