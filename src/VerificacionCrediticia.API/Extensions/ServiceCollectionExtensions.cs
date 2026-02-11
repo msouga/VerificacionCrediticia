@@ -4,6 +4,7 @@ using Microsoft.Extensions.Http.Resilience;
 using Polly;
 using VerificacionCrediticia.Core.Interfaces;
 using VerificacionCrediticia.Core.Services;
+using VerificacionCrediticia.Infrastructure.AzureOpenAI;
 using VerificacionCrediticia.Infrastructure.ContentUnderstanding;
 using VerificacionCrediticia.Infrastructure.Equifax;
 using VerificacionCrediticia.Infrastructure.Persistence;
@@ -69,21 +70,21 @@ public static class ServiceCollectionExtensions
         var equifaxSettings = configuration.GetSection(EquifaxSettings.SectionName);
         services.Configure<EquifaxSettings>(equifaxSettings);
 
-        // Configuración de Content Understanding
-        var cuSettings = configuration.GetSection(ContentUnderstandingSettings.SectionName);
-        services.Configure<ContentUnderstandingSettings>(cuSettings);
+        // Configuracion de Azure OpenAI (GPT-4.1 Vision)
+        var aoaiSettings = configuration.GetSection(AzureOpenAISettings.SectionName);
+        services.Configure<AzureOpenAISettings>(aoaiSettings);
 
-        if (cuSettings.GetValue<bool>("UseMock"))
+        if (aoaiSettings.GetValue<bool>("UseMock"))
         {
             services.AddScoped<IDocumentIntelligenceService, DocumentIntelligenceServiceMock>();
         }
         else
         {
-            services.AddHttpClient<IDocumentIntelligenceService, ContentUnderstandingService>()
-                .AddResilienceHandler("content-understanding", (builder, context) =>
+            services.AddHttpClient<IDocumentIntelligenceService, OpenAIVisionService>()
+                .AddResilienceHandler("azure-openai-vision", (builder, context) =>
                 {
                     var loggerFactory = context.ServiceProvider.GetRequiredService<ILoggerFactory>();
-                    var logger = loggerFactory.CreateLogger("ContentUnderstanding.Resilience");
+                    var logger = loggerFactory.CreateLogger("AzureOpenAI.Resilience");
 
                     builder.AddRetry(new HttpRetryStrategyOptions
                     {
@@ -112,13 +113,12 @@ public static class ServiceCollectionExtensions
                                 }
                             }
 
-                            // Sin Retry-After: usar el backoff exponencial por defecto
                             return ValueTask.FromResult<TimeSpan?>(null);
                         },
                         OnRetry = args =>
                         {
                             logger.LogWarning(
-                                "Retry {AttemptNumber} para Content Understanding. Status: {Status}. Esperando {Delay}",
+                                "Retry {AttemptNumber} para Azure OpenAI Vision. Status: {Status}. Esperando {Delay}",
                                 args.AttemptNumber,
                                 args.Outcome.Result?.StatusCode,
                                 args.RetryDelay);

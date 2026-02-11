@@ -17,20 +17,52 @@ public class DocumentProcessingService : IDocumentProcessingService
         _expedienteRepo = expedienteRepo;
     }
 
+    private static readonly Dictionary<string, string> NombresTipo = new()
+    {
+        ["DNI"] = "DNI (Documento de Identidad)",
+        ["VIGENCIA_PODER"] = "Vigencia de Poder",
+        ["BALANCE_GENERAL"] = "Balance General",
+        ["ESTADO_RESULTADOS"] = "Estado de Resultados",
+        ["FICHA_RUC"] = "Ficha RUC"
+    };
+
     public async Task<object> ProcesarSegunTipoAsync(
         string codigoTipo, Stream documentStream, string fileName,
         CancellationToken cancellationToken = default,
         IProgress<string>? progreso = null)
     {
-        return codigoTipo switch
+        // Validar que el codigoTipo sea conocido
+        if (!NombresTipo.ContainsKey(codigoTipo))
+            throw new NotSupportedException($"Tipo de documento '{codigoTipo}' no tiene procesamiento implementado");
+
+        // Clasificar y extraer en una sola llamada
+        var clasificacion = await _documentIntelligence.ClasificarYProcesarAsync(
+            documentStream, fileName, cancellationToken, progreso);
+
+        var categoriaDetectada = clasificacion.CategoriaDetectada;
+
+        // Validar que el documento corresponda al slot esperado
+        if (categoriaDetectada == "other")
         {
-            "DNI" => await _documentIntelligence.ProcesarDocumentoIdentidadAsync(documentStream, fileName, cancellationToken),
-            "VIGENCIA_PODER" => await _documentIntelligence.ProcesarVigenciaPoderAsync(documentStream, fileName, cancellationToken, progreso),
-            "BALANCE_GENERAL" => await _documentIntelligence.ProcesarBalanceGeneralAsync(documentStream, fileName, cancellationToken, progreso),
-            "ESTADO_RESULTADOS" => await _documentIntelligence.ProcesarEstadoResultadosAsync(documentStream, fileName, cancellationToken, progreso),
-            "FICHA_RUC" => await _documentIntelligence.ProcesarFichaRucAsync(documentStream, fileName, cancellationToken, progreso),
-            _ => throw new NotSupportedException($"Tipo de documento '{codigoTipo}' no tiene procesamiento implementado")
-        };
+            throw new InvalidOperationException(
+                "El documento no corresponde a ningun tipo conocido. Suba un documento valido.");
+        }
+
+        if (!string.Equals(categoriaDetectada, codigoTipo, StringComparison.OrdinalIgnoreCase))
+        {
+            var nombreDetectado = NombresTipo.GetValueOrDefault(categoriaDetectada, categoriaDetectada);
+            var nombreEsperado = NombresTipo.GetValueOrDefault(codigoTipo, codigoTipo);
+            throw new InvalidOperationException(
+                $"El documento parece ser un {nombreDetectado}, no un {nombreEsperado}. Verifique que subio el documento correcto.");
+        }
+
+        if (clasificacion.ResultadoExtraccion == null)
+        {
+            throw new InvalidOperationException(
+                $"El clasificador detecto el tipo correcto ({categoriaDetectada}) pero no pudo extraer campos del documento.");
+        }
+
+        return clasificacion.ResultadoExtraccion;
     }
 
     public async Task ActualizarDatosExpedienteAsync(Expediente expediente, string codigoTipo, object resultado)

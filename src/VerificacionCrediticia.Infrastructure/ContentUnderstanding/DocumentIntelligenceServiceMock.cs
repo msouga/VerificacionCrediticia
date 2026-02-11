@@ -802,6 +802,59 @@ public class DocumentIntelligenceServiceMock : IDocumentIntelligenceService
         };
     }
 
+    public async Task<ClasificacionResultadoDto> ClasificarYProcesarAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
+    {
+        await Task.Delay(300, cancellationToken);
+        progreso?.Report("Clasificando documento...");
+
+        _logger.LogInformation("[MOCK] Clasificando documento: {NombreArchivo}", nombreArchivo);
+
+        var nombreLower = nombreArchivo.ToLowerInvariant();
+
+        // Detectar categoria por nombre de archivo
+        string categoria;
+        if (nombreLower.Contains("dni") || nombreLower.Contains("identidad"))
+            categoria = "DNI";
+        else if (nombreLower.Contains("vigencia") || nombreLower.Contains("poder"))
+            categoria = "VIGENCIA_PODER";
+        else if (nombreLower.Contains("balance"))
+            categoria = "BALANCE_GENERAL";
+        else if (nombreLower.Contains("estado") || nombreLower.Contains("resultado") || nombreLower.Contains("ganancia") || nombreLower.Contains("perdida"))
+            categoria = "ESTADO_RESULTADOS";
+        else if (nombreLower.Contains("ruc") || nombreLower.Contains("ficha") || nombreLower.Contains("sunat"))
+            categoria = "FICHA_RUC";
+        else
+            categoria = "other";
+
+        _logger.LogInformation("[MOCK] Documento clasificado como: {Categoria}", categoria);
+
+        // Resetear stream para que los metodos de procesamiento puedan leerlo
+        if (documentStream.CanSeek)
+            documentStream.Position = 0;
+
+        // Procesar segun la categoria detectada
+        object? resultado = categoria switch
+        {
+            "DNI" => await ProcesarDocumentoIdentidadAsync(documentStream, nombreArchivo, cancellationToken),
+            "VIGENCIA_PODER" => await ProcesarVigenciaPoderAsync(documentStream, nombreArchivo, cancellationToken, progreso),
+            "BALANCE_GENERAL" => await ProcesarBalanceGeneralAsync(documentStream, nombreArchivo, cancellationToken, progreso),
+            "ESTADO_RESULTADOS" => await ProcesarEstadoResultadosAsync(documentStream, nombreArchivo, cancellationToken, progreso),
+            "FICHA_RUC" => await ProcesarFichaRucAsync(documentStream, nombreArchivo, cancellationToken, progreso),
+            _ => null
+        };
+
+        return new ClasificacionResultadoDto
+        {
+            CategoriaDetectada = categoria,
+            ResultadoExtraccion = resultado,
+            ConfianzaClasificacion = categoria == "other" ? 0.5m : 0.92m
+        };
+    }
+
     public async Task<EstadoResultadosDto> ProcesarEstadoResultadosAsync(
         Stream documentStream,
         string nombreArchivo,

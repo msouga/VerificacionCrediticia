@@ -13,7 +13,7 @@
 src/
   VerificacionCrediticia.API/          # Controllers, Program.cs, DI
   VerificacionCrediticia.Core/         # Entities, DTOs, Enums, Services, Interfaces
-  VerificacionCrediticia.Infrastructure/ # Equifax, ContentUnderstanding, Reniec, Storage, Persistence
+  VerificacionCrediticia.Infrastructure/ # Equifax, AzureOpenAI, Reniec, Storage, Persistence
   VerificacionCrediticia.Angular/      # Frontend Angular 19
 tests/
   VerificacionCrediticia.UnitTests/
@@ -33,19 +33,23 @@ tests/
 - Debug VS Code: usar launch.json con compound "Full Stack Debug"
 - Kill procesos: task "kill-alldebug" en VS Code
 
-## Azure Content Understanding
+## Azure OpenAI Vision (GPT-4.1)
 - Recurso: `cu-vercred-dev` (AIServices, S0) en **westus**, RG: `rg-vercred-cu-dev`
 - Endpoint: `https://westus.api.cognitive.microsoft.com/`
-- API version: `2025-11-01` (GA)
-- Modelos: `gpt-41-mini` (gpt-4.1-mini), `text-embedding-3-large`
-- Analyzers: `dniperuano`, `vigenciaPoderes`, `balanceGeneral`, `estadoResultados`
-- Config mock/real: `ContentUnderstanding.UseMock` en `appsettings.Development.json`
+- Deployment: `gpt-41` (gpt-4.1, Standard, capacity 10)
+- API version: `2024-12-01-preview`
+- Flujo: PDF -> imagenes PNG (PDFtoImage, 200 DPI) -> GPT-4.1 Vision -> JSON estructurado
+- Prompt universal clasifica en 5 tipos (DNI, VIGENCIA_PODER, BALANCE_GENERAL, ESTADO_RESULTADOS, FICHA_RUC) y extrae campos en 1 llamada
+- Tiempo: 10-30s por documento (vs 3-7 min con Content Understanding)
+- Config mock/real: `AzureOpenAI.UseMock` en `appsettings.Development.json`
+- Content Understanding (anterior): analyzers siguen en el recurso pero ya no se usan
 
 ## Endpoints de documentos (individuales, sin expediente)
 - `POST /api/documentos/dni` - Procesa DNI (multipart/form-data, respuesta JSON)
 - `POST /api/documentos/vigencia-poder` - Procesa Vigencia de Poder (multipart/form-data, respuesta SSE)
 - `POST /api/documentos/balance-general` - Procesa Balance General (multipart/form-data, respuesta SSE)
 - `POST /api/documentos/estado-resultados` - Procesa Estado de Resultados (multipart/form-data, respuesta SSE)
+- `POST /api/documentos/ficha-ruc` - Procesa Ficha RUC SUNAT (multipart/form-data, respuesta SSE)
   - Eventos SSE: `progress` (texto), `result` (JSON), `error` (texto)
 
 ## Endpoints de configuracion
@@ -65,24 +69,24 @@ tests/
 - `DELETE /api/expedientes` - Eliminar multiples (body: [ids])
 - `POST /api/expedientes/{id}/documentos/{codigoTipo}` - Subir documento a blob (JSON, sin procesamiento)
 - `PUT /api/expedientes/{id}/documentos/{docId}` - Reemplazar documento (JSON)
-- `POST /api/expedientes/{id}/evaluar` - Evaluar: procesa todos con Content Understanding + reglas (SSE)
+- `POST /api/expedientes/{id}/evaluar` - Evaluar: procesa todos con Azure OpenAI Vision + reglas (SSE)
 - `GET /api/expedientes/tipos-documento` - Lista tipos de documento
 
 ## Flujo de expedientes
-1. **Subir documentos**: POST va a Azure Blob Storage, estado = Subido (4), respuesta JSON instantanea. Se encola automaticamente para procesamiento background con Content Understanding.
-2. **Procesamiento background**: `BackgroundDocumentProcessor` (hosted service) consume la cola `Channel<T>`, procesa hasta 3 documentos en paralelo. Estados: Subido -> Procesando -> Procesado/Error. Recovery al reiniciar (re-encola Subido/Procesando).
+1. **Subir documentos**: POST va a Azure Blob Storage, estado = Subido (4), respuesta JSON instantanea. Se encola automaticamente para procesamiento background con Azure OpenAI Vision.
+2. **Procesamiento background**: `BackgroundDocumentProcessor` (hosted service) consume la cola `Channel<T>`, procesa hasta 3 documentos en paralelo. Estados: Subido -> Procesando -> Procesado/Error. Recovery al reiniciar (re-encola Subido/Procesando). Usa GPT-4.1 Vision para clasificar+extraer en 1 llamada. Si el documento no coincide con el slot, estado = Error con mensaje descriptivo.
 3. **Frontend polling**: cada 5s recarga el expediente para ver progreso de procesamiento. Se detiene cuando todos los docs estan Procesado/Error.
 4. **Evaluar**: POST SSE. Si todos los docs ya estan Procesados, solo aplica reglas crediticias (instantaneo). Fallback sincrono para docs que no terminaron de procesar.
    - Eventos SSE: `progress` (JSON ProgresoEvaluacionDto con archivo, paso, detalle, documentoActual, totalDocumentos), `result` (JSON ExpedienteDto), `error` (texto)
-   - `detalle` contiene mensajes de polling de Content Understanding (ej: "Analizando estructura...", "Extrayendo texto con OCR...")
+   - `detalle` contiene mensajes de progreso de GPT-4.1 Vision (ej: "Convirtiendo paginas...", "Analizando con IA...")
    - Soporta cancelacion via CancellationToken/AbortController
    - Retry automatico (1 intento) si falla un documento
 
-## Resiliencia HTTP (Content Understanding)
+## Resiliencia HTTP (Azure OpenAI Vision)
 - Polly retry: 429 (TooManyRequests), 503 (ServiceUnavailable), 408 (RequestTimeout)
 - Backoff exponencial (2s base) con jitter, max 5 reintentos
 - Respeta header `Retry-After` de Azure (delta o fecha absoluta)
-- `EnsureSuccessAsync`: lee body de error de Azure AI Services antes de lanzar excepcion (mensajes utiles en vez de genericos)
+- `EnsureSuccessAsync`: lee body de error de Azure OpenAI antes de lanzar excepcion (mensajes utiles en vez de genericos)
 - Los 500 y otros errores NO se reintentan
 
 ## Datos de prueba (Mock Evaluacion)

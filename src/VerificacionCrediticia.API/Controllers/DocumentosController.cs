@@ -16,6 +16,7 @@ public class DocumentosController : ControllerBase
 
     private static readonly string[] _extensionesPermitidas = { ".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tiff" };
     private const long _tamanoMaximoBytes = 4 * 1024 * 1024; // 4 MB (limite F0)
+    private readonly SemaphoreSlim _sseWriteLock = new(1, 1);
 
     public DocumentosController(
         IDocumentIntelligenceService documentIntelligenceService,
@@ -71,7 +72,7 @@ public class DocumentosController : ControllerBase
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Error en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Error en Azure OpenAI Vision: {Mensaje}", ex.Message);
             return StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails
             {
                 Title = "Error al procesar documento",
@@ -81,7 +82,7 @@ public class DocumentosController : ControllerBase
         }
         catch (TimeoutException ex)
         {
-            _logger.LogError(ex, "Timeout en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Timeout en Azure OpenAI Vision: {Mensaje}", ex.Message);
             return StatusCode(StatusCodes.Status504GatewayTimeout, new ProblemDetails
             {
                 Title = "Tiempo de espera agotado",
@@ -112,12 +113,11 @@ public class DocumentosController : ControllerBase
 
         try
         {
-            await EnviarEvento("progress", "Enviando documento a Azure Content Understanding...", cancellationToken);
+            await EnviarEvento("progress", "Enviando documento a Azure OpenAI Vision...", cancellationToken);
 
             var progreso = new Progress<string>(async mensaje =>
             {
-                try { await EnviarEvento("progress", mensaje, cancellationToken); }
-                catch { /* SSE ya cerrado */ }
+                await EnviarEventoSeguro("progress", mensaje);
             });
 
             using var stream = archivo.OpenReadStream();
@@ -190,12 +190,12 @@ public class DocumentosController : ControllerBase
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Error en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Error en Azure OpenAI Vision: {Mensaje}", ex.Message);
             await EnviarEvento("error", "El servicio de procesamiento de documentos no pudo analizar el archivo", cancellationToken);
         }
         catch (TimeoutException ex)
         {
-            _logger.LogError(ex, "Timeout en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Timeout en Azure OpenAI Vision: {Mensaje}", ex.Message);
             await EnviarEvento("error", "El servicio de procesamiento de documentos no respondio a tiempo", cancellationToken);
         }
         catch (Exception ex)
@@ -226,12 +226,11 @@ public class DocumentosController : ControllerBase
 
         try
         {
-            await EnviarEvento("progress", "Enviando Balance General a Azure Content Understanding...", cancellationToken);
+            await EnviarEvento("progress", "Enviando Balance General a Azure OpenAI Vision...", cancellationToken);
 
             var progreso = new Progress<string>(async mensaje =>
             {
-                try { await EnviarEvento("progress", mensaje, cancellationToken); }
-                catch { /* SSE ya cerrado */ }
+                await EnviarEventoSeguro("progress", mensaje);
             });
 
             using var stream = archivo.OpenReadStream();
@@ -316,12 +315,12 @@ public class DocumentosController : ControllerBase
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Error en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Error en Azure OpenAI Vision: {Mensaje}", ex.Message);
             await EnviarEvento("error", "El servicio de procesamiento de documentos no pudo analizar el archivo", cancellationToken);
         }
         catch (TimeoutException ex)
         {
-            _logger.LogError(ex, "Timeout en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Timeout en Azure OpenAI Vision: {Mensaje}", ex.Message);
             await EnviarEvento("error", "El servicio de procesamiento de documentos no respondio a tiempo", cancellationToken);
         }
         catch (Exception ex)
@@ -354,10 +353,10 @@ public class DocumentosController : ControllerBase
         {
             using var stream = archivo.OpenReadStream();
 
-            // Progreso para Content Understanding
+            // Progreso para Azure OpenAI Vision
             var progreso = new Progress<string>(async mensaje =>
             {
-                await EnviarEvento("progress", mensaje, cancellationToken);
+                await EnviarEventoSeguro("progress", mensaje);
             });
 
             var resultado = await _documentIntelligenceService.ProcesarEstadoResultadosAsync(
@@ -418,12 +417,12 @@ public class DocumentosController : ControllerBase
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Error en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Error en Azure OpenAI Vision: {Mensaje}", ex.Message);
             await EnviarEvento("error", "El servicio de procesamiento de documentos no pudo analizar el archivo", cancellationToken);
         }
         catch (TimeoutException ex)
         {
-            _logger.LogError(ex, "Timeout en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Timeout en Azure OpenAI Vision: {Mensaje}", ex.Message);
             await EnviarEvento("error", "El servicio de procesamiento de documentos no respondio a tiempo", cancellationToken);
         }
         catch (Exception ex)
@@ -454,12 +453,11 @@ public class DocumentosController : ControllerBase
 
         try
         {
-            await EnviarEvento("progress", "Enviando Ficha RUC a Azure Content Understanding...", cancellationToken);
+            await EnviarEvento("progress", "Enviando Ficha RUC a Azure OpenAI Vision...", cancellationToken);
 
             var progreso = new Progress<string>(async mensaje =>
             {
-                try { await EnviarEvento("progress", mensaje, cancellationToken); }
-                catch { /* SSE ya cerrado */ }
+                await EnviarEventoSeguro("progress", mensaje);
             });
 
             using var stream = archivo.OpenReadStream();
@@ -508,12 +506,12 @@ public class DocumentosController : ControllerBase
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Error en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Error en Azure OpenAI Vision: {Mensaje}", ex.Message);
             await EnviarEvento("error", "El servicio de procesamiento de documentos no pudo analizar el archivo", cancellationToken);
         }
         catch (TimeoutException ex)
         {
-            _logger.LogError(ex, "Timeout en Content Understanding: {Mensaje}", ex.Message);
+            _logger.LogError(ex, "Timeout en Azure OpenAI Vision: {Mensaje}", ex.Message);
             await EnviarEvento("error", "El servicio de procesamiento de documentos no respondio a tiempo", cancellationToken);
         }
         catch (Exception ex)
@@ -557,8 +555,35 @@ public class DocumentosController : ControllerBase
 
     private async Task EnviarEvento(string tipo, string datos, CancellationToken ct)
     {
-        await Response.WriteAsync($"event: {tipo}\ndata: {datos}\n\n", ct);
-        await Response.Body.FlushAsync(ct);
+        await _sseWriteLock.WaitAsync(ct);
+        try
+        {
+            await Response.WriteAsync($"event: {tipo}\ndata: {datos}\n\n", ct);
+            await Response.Body.FlushAsync(ct);
+        }
+        finally
+        {
+            _sseWriteLock.Release();
+        }
+    }
+
+    private async Task EnviarEventoSeguro(string tipo, string datos)
+    {
+        try
+        {
+            await _sseWriteLock.WaitAsync();
+            try
+            {
+                await Response.WriteAsync($"event: {tipo}\ndata: {datos}\n\n");
+                await Response.Body.FlushAsync();
+            }
+            finally
+            {
+                _sseWriteLock.Release();
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (ObjectDisposedException) { }
     }
 
     private ActionResult? ValidarArchivo(IFormFile? archivo)

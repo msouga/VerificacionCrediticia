@@ -25,6 +25,9 @@ public class AnalyzeResult
 
 public class AnalyzeContent
 {
+    [JsonPropertyName("category")]
+    public string? Category { get; set; }
+
     [JsonPropertyName("fields")]
     public Dictionary<string, AnalyzeField>? Fields { get; set; }
 

@@ -54,4 +54,15 @@ public interface IDocumentIntelligenceService
         string nombreArchivo,
         CancellationToken cancellationToken = default,
         IProgress<string>? progreso = null);
+
+    /// <summary>
+    /// Clasifica un documento usando Content Understanding contentCategories
+    /// y extrae campos automaticamente si el sub-analyzer esta enlazado.
+    /// Retorna la categoria detectada y el resultado de extraccion tipado.
+    /// </summary>
+    Task<ClasificacionResultadoDto> ClasificarYProcesarAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null);
 }

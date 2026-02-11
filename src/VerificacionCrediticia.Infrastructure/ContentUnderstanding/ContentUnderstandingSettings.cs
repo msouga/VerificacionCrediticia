@@ -11,6 +11,7 @@ public class ContentUnderstandingSettings
     public string BalanceGeneralAnalyzerId { get; set; } = "balanceGeneral";
     public string EstadoResultadosAnalyzerId { get; set; } = "estadoResultados";
     public string FichaRucAnalyzerId { get; set; } = "fichaRuc";
+    public string ClasificadorAnalyzerId { get; set; } = "clasificadorDocumentos";
     public string ApiVersion { get; set; } = "2025-11-01";
     public bool UseMock { get; set; } = true;
     public int PollingIntervalMs { get; set; } = 1000;

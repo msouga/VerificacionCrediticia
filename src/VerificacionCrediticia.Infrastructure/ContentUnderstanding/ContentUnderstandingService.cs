@@ -644,6 +644,87 @@ public class ContentUnderstandingService : IDocumentIntelligenceService
         return dto;
     }
 
+    public async Task<ClasificacionResultadoDto> ClasificarYProcesarAsync(
+        Stream documentStream,
+        string nombreArchivo,
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progreso = null)
+    {
+        _logger.LogInformation("Clasificando documento con Content Understanding: {NombreArchivo}", nombreArchivo);
+
+        using var memoryStream = new MemoryStream();
+        await documentStream.CopyToAsync(memoryStream, cancellationToken);
+        var bytes = memoryStream.ToArray();
+
+        var analyzeUrl = $"/contentunderstanding/analyzers/{_settings.ClasificadorAnalyzerId}:analyzeBinary?api-version={_settings.ApiVersion}";
+
+        using var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        var response = await _httpClient.PostAsync(analyzeUrl, content, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        if (!response.Headers.TryGetValues("Operation-Location", out var operationLocations))
+        {
+            throw new InvalidOperationException("La respuesta no contiene el header Operation-Location");
+        }
+
+        var resultUrl = new Uri(operationLocations.First()).PathAndQuery;
+        _logger.LogInformation("Clasificacion iniciada, polling en: {ResultUrl}", resultUrl);
+
+        var analyzeResult = await PollForResultAsync(resultUrl, cancellationToken, progreso);
+
+        // La respuesta tiene multiples contents: el principal (sin category) y el segmento clasificado (con category y fields)
+        var contentItem = analyzeResult.Result?.Contents?
+            .FirstOrDefault(c => !string.IsNullOrEmpty(c.Category));
+        var categoria = contentItem?.Category ?? "other";
+
+        _logger.LogInformation("Documento clasificado como: {Categoria}", categoria);
+
+        // Para mapear, necesitamos un AnalyzeResultResponse con el content correcto en primera posicion
+        // ya que los metodos de mapeo usan Contents.FirstOrDefault()
+        var resultadoParaMapeo = new AnalyzeResultResponse
+        {
+            Id = analyzeResult.Id,
+            Status = analyzeResult.Status,
+            Result = new AnalyzeResult
+            {
+                AnalyzerId = analyzeResult.Result?.AnalyzerId ?? string.Empty,
+                Contents = contentItem != null ? new List<AnalyzeContent> { contentItem } : new List<AnalyzeContent>()
+            }
+        };
+
+        // Mapear resultado de extraccion segun la categoria detectada
+        object? resultadoExtraccion = categoria switch
+        {
+            "DNI" => MapearResultado(resultadoParaMapeo, nombreArchivo),
+            "VIGENCIA_PODER" => MapearResultadoVigenciaPoder(resultadoParaMapeo, nombreArchivo),
+            "BALANCE_GENERAL" => MapearResultadoBalanceGeneral(resultadoParaMapeo, nombreArchivo),
+            "ESTADO_RESULTADOS" => MapearResultadoEstadoResultados(resultadoParaMapeo, nombreArchivo),
+            "FICHA_RUC" => MapearResultadoFichaRuc(resultadoParaMapeo, nombreArchivo),
+            _ => null
+        };
+
+        // Calcular confianza de clasificacion como promedio de confianza de campos extraidos
+        decimal confianzaClasificacion = 0;
+        if (contentItem?.Fields != null)
+        {
+            var confidenceValues = contentItem.Fields
+                .Where(f => f.Value?.Confidence != null)
+                .Select(f => (decimal)f.Value.Confidence!.Value)
+                .ToList();
+            if (confidenceValues.Count > 0)
+                confianzaClasificacion = confidenceValues.Average();
+        }
+
+        return new ClasificacionResultadoDto
+        {
+            CategoriaDetectada = categoria,
+            ResultadoExtraccion = resultadoExtraccion,
+            ConfianzaClasificacion = confianzaClasificacion
+        };
+    }
+
     public async Task<EstadoResultadosDto> ProcesarEstadoResultadosAsync(
         Stream documentStream,
         string nombreArchivo,
