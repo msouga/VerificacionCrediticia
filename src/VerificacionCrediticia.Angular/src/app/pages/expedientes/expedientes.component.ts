@@ -159,23 +159,37 @@ export class ExpedientesComponent implements OnInit {
     });
   }
 
-  getEstadoLabel(estado: EstadoExpediente): string {
+  getEstadoLabel(row: ExpedienteResumen): string {
+    if (row.estado === EstadoExpediente.Evaluado && row.recomendacion !== null) {
+      switch (row.recomendacion) {
+        case 0: return 'Aprobado';
+        case 1: return 'Revision Manual';
+        case 2: return 'Rechazado';
+      }
+    }
     const labels: Record<number, string> = {
       [EstadoExpediente.Iniciado]: 'Iniciado',
       [EstadoExpediente.EnProceso]: 'En Proceso',
       [EstadoExpediente.DocumentosCompletos]: 'Docs. Completos',
       [EstadoExpediente.Evaluado]: 'Evaluado'
     };
-    return labels[estado] || 'Desconocido';
+    return labels[row.estado] || 'Desconocido';
   }
 
-  getEstadoColor(estado: EstadoExpediente): string {
+  getEstadoColor(row: ExpedienteResumen): string {
+    if (row.estado === EstadoExpediente.Evaluado && row.recomendacion !== null) {
+      switch (row.recomendacion) {
+        case 0: return 'success';
+        case 1: return 'warning';
+        case 2: return 'error';
+      }
+    }
     const colors: Record<number, string> = {
       [EstadoExpediente.Iniciado]: 'default',
       [EstadoExpediente.EnProceso]: 'accent',
       [EstadoExpediente.DocumentosCompletos]: 'primary',
       [EstadoExpediente.Evaluado]: 'primary'
     };
-    return colors[estado] || 'default';
+    return colors[row.estado] || 'default';
   }
 }

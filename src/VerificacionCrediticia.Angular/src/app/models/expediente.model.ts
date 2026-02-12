@@ -178,6 +178,8 @@ export interface ExpedienteResumen {
   fechaCreacion: string;
   documentosObligatoriosCompletos: number;
   totalDocumentosObligatorios: number;
+  recomendacion: number | null;
+  scoreFinal: number | null;
 }
 
 export interface ListaExpedientesResponse {
@@ -185,4 +187,28 @@ export interface ListaExpedientesResponse {
   total: number;
   pagina: number;
   tamanoPagina: number;
+}
+
+export interface EstadisticasExpedientes {
+  totalExpedientes: number;
+  evaluados: number;
+  enProceso: number;
+  aprobados: number;
+  enRevision: number;
+  rechazados: number;
+  scorePromedio: number;
+  recientes: ExpedienteEvaluadoResumen[];
+}
+
+export interface ExpedienteEvaluadoResumen {
+  id: number;
+  descripcion: string;
+  dniSolicitante: string | null;
+  nombresSolicitante: string | null;
+  apellidosSolicitante: string | null;
+  rucEmpresa: string | null;
+  razonSocialEmpresa: string | null;
+  scoreFinal: number;
+  recomendacion: number;
+  fechaEvaluacion: string;
 }

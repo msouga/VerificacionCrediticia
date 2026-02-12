@@ -465,6 +465,14 @@ public class ExpedientesController : ControllerBase
         return Ok(tipos);
     }
 
+    [HttpGet("estadisticas")]
+    [ProducesResponseType(typeof(EstadisticasExpedientesDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<EstadisticasExpedientesDto>> GetEstadisticas()
+    {
+        var stats = await _expedienteService.GetEstadisticasAsync();
+        return Ok(stats);
+    }
+
     private async Task EnviarEvento(string eventType, string data, CancellationToken ct)
     {
         var mensaje = $"event: {eventType}\ndata: {data}\n\n";

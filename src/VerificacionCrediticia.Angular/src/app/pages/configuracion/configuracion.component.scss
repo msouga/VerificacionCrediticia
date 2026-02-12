@@ -55,10 +55,44 @@
 
 // Reglas de evaluacion
 
+// Botones guardar/descartar compartidos
+.seccion-acciones-guardar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+
+  .btn-spinner {
+    display: inline-block;
+    margin-right: 4px;
+  }
+}
+
+.fila-modificada {
+  background: #fff8e1 !important;
+}
+
 .reglas-header {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.reglas-acciones-guardar {
+  display: flex;
+  gap: 8px;
+  margin-right: auto;
+
+  .btn-spinner {
+    display: inline-block;
+    margin-right: 4px;
+  }
+}
+
+.regla-modificada {
+  background: #fff8e1 !important;
 }
 
 .reglas-table-container {

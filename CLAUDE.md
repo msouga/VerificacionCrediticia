@@ -75,6 +75,7 @@ tests/
 - `DELETE /api/expedientes/{id}/documentos/{docId}` - Descartar documento en error (elimina blob + registro)
 - `POST /api/expedientes/{id}/documentos/{docId}/aceptar` - Aceptar documento en error como correcto y re-encolar
 - `GET /api/expedientes/tipos-documento` - Lista tipos de documento
+- `GET /api/expedientes/estadisticas` - Estadisticas del dashboard (conteos, score promedio, recientes)
 
 ## Flujo de expedientes
 1. **Subir documentos**: POST va a Azure Blob Storage, estado = Subido (4), respuesta JSON instantanea. Se encola automaticamente para procesamiento background con Azure OpenAI Vision.

@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, inject, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
@@ -52,15 +52,17 @@ export class ConfiguracionComponent implements OnInit {
 
   // Tipos de documento
   tipos: TipoDocumentoConfig[] = [];
+  tiposOriginales: TipoDocumentoConfig[] = [];
   displayedColumns = ['nombre', 'codigo', 'analyzerId', 'obligatorio', 'activo', 'orden'];
   cargando = true;
-  actualizandoId: number | null = null;
+  guardandoTipos = false;
 
   // Reglas de evaluacion
   reglas: ReglaEvaluacionConfig[] = [];
+  reglasOriginales: ReglaEvaluacionConfig[] = [];
   reglasColumns = ['nombre', 'campo', 'operador', 'valor', 'peso', 'resultado', 'activa', 'orden', 'acciones'];
   cargandoReglas = true;
-  actualizandoReglaId: number | null = null;
+  guardandoReglas = false;
 
   // Parametros de linea de credito
   parametrosLC: ParametrosLineaCredito = {
@@ -71,6 +73,7 @@ export class ConfiguracionComponent implements OnInit {
     pesoRedNivel1: 50,
     pesoRedNivel2: 25
   };
+  parametrosLCOriginal: ParametrosLineaCredito = { ...this.parametrosLC };
   cargandoLC = true;
   guardandoLC = false;
 
@@ -95,13 +98,81 @@ export class ConfiguracionComponent implements OnInit {
     this.cargarParametrosLC();
   }
 
-  // --- Tipos de documento ---
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hayCambiosSinGuardar) {
+      event.preventDefault();
+    }
+  }
+
+  /** Verifica si el componente puede desactivarse (navegacion interna Angular) */
+  canDeactivate(): boolean {
+    if (!this.hayCambiosSinGuardar) return true;
+    return confirm('Hay cambios sin guardar. ¿Desea salir y perder los cambios?');
+  }
+
+  get hayCambiosSinGuardar(): boolean {
+    return this.hayTiposModificados || this.hayReglasModificadas || this.hayParametrosLCModificados;
+  }
+
+  // --- Reglas: dirty tracking ---
+
+  get hayReglasModificadas(): boolean {
+    if (this.reglas.length !== this.reglasOriginales.length) return false;
+    return this.reglas.some((r, i) => {
+      const o = this.reglasOriginales.find(orig => orig.id === r.id);
+      if (!o) return true;
+      return r.operador !== o.operador || r.valor !== o.valor || r.peso !== o.peso
+        || r.resultado !== o.resultado || r.activa !== o.activa || r.orden !== o.orden
+        || r.descripcion !== o.descripcion;
+    });
+  }
+
+  getReglasModificadasIds(): Set<number> {
+    const ids = new Set<number>();
+    for (const r of this.reglas) {
+      const o = this.reglasOriginales.find(orig => orig.id === r.id);
+      if (!o) { ids.add(r.id); continue; }
+      if (r.operador !== o.operador || r.valor !== o.valor || r.peso !== o.peso
+        || r.resultado !== o.resultado || r.activa !== o.activa || r.orden !== o.orden
+        || r.descripcion !== o.descripcion) {
+        ids.add(r.id);
+      }
+    }
+    return ids;
+  }
+
+  private clonarReglas(reglas: ReglaEvaluacionConfig[]): ReglaEvaluacionConfig[] {
+    return reglas.map(r => ({ ...r }));
+  }
+
+  // --- Tipos de documento: dirty tracking ---
+
+  get hayTiposModificados(): boolean {
+    if (this.tipos.length !== this.tiposOriginales.length) return false;
+    return this.tipos.some(t => {
+      const o = this.tiposOriginales.find(orig => orig.id === t.id);
+      if (!o) return true;
+      return t.esObligatorio !== o.esObligatorio || t.activo !== o.activo || t.orden !== o.orden;
+    });
+  }
+
+  isTipoModificado(tipo: TipoDocumentoConfig): boolean {
+    const o = this.tiposOriginales.find(orig => orig.id === tipo.id);
+    if (!o) return true;
+    return tipo.esObligatorio !== o.esObligatorio || tipo.activo !== o.activo || tipo.orden !== o.orden;
+  }
+
+  private clonarTipos(tipos: TipoDocumentoConfig[]): TipoDocumentoConfig[] {
+    return tipos.map(t => ({ ...t }));
+  }
 
   cargarTipos(): void {
     this.cargando = true;
     this.api.getTiposDocumentoConfig().subscribe({
       next: (tipos) => {
         this.tipos = tipos;
+        this.tiposOriginales = this.clonarTipos(tipos);
         this.cargando = false;
         this.cdr.markForCheck();
       },
@@ -113,43 +184,78 @@ export class ConfiguracionComponent implements OnInit {
     });
   }
 
-  actualizarTipo(tipo: TipoDocumentoConfig): void {
-    this.actualizandoId = tipo.id;
+  onTipoToggleObligatorio(tipo: TipoDocumentoConfig, checked: boolean): void {
+    tipo.esObligatorio = checked;
     this.cdr.markForCheck();
-
-    const request: ActualizarTipoDocumentoRequest = {
-      esObligatorio: tipo.esObligatorio,
-      activo: tipo.activo,
-      orden: tipo.orden,
-      descripcion: tipo.descripcion,
-      analyzerId: tipo.analyzerId
-    };
-
-    this.api.actualizarTipoDocumento(tipo.id, request).subscribe({
-      next: (actualizado) => {
-        const index = this.tipos.findIndex(t => t.id === tipo.id);
-        if (index >= 0) {
-          this.tipos[index] = actualizado;
-        }
-        this.actualizandoId = null;
-        this.snackBar.open(`${tipo.nombre} actualizado`, 'OK', { duration: 2000 });
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.actualizandoId = null;
-        this.snackBar.open(`Error al actualizar ${tipo.nombre}`, 'Cerrar', { duration: 5000 });
-        this.cargarTipos();
-      }
-    });
   }
 
-  onOrdenBlur(tipo: TipoDocumentoConfig, event: Event): void {
+  onTipoToggleActivo(tipo: TipoDocumentoConfig, checked: boolean): void {
+    tipo.activo = checked;
+    this.cdr.markForCheck();
+  }
+
+  onTipoOrdenChange(tipo: TipoDocumentoConfig, event: Event): void {
     const input = event.target as HTMLInputElement;
     const nuevoOrden = parseInt(input.value, 10);
-    if (!isNaN(nuevoOrden) && nuevoOrden !== tipo.orden) {
+    if (!isNaN(nuevoOrden)) {
       tipo.orden = nuevoOrden;
-      this.actualizarTipo(tipo);
+      this.cdr.markForCheck();
     }
+  }
+
+  guardarTipos(): void {
+    const modificados = this.tipos.filter(t => this.isTipoModificado(t));
+    if (modificados.length === 0) return;
+
+    this.guardandoTipos = true;
+    this.cdr.markForCheck();
+
+    let completadas = 0;
+    let errores = 0;
+
+    for (const tipo of modificados) {
+      const request: ActualizarTipoDocumentoRequest = {
+        esObligatorio: tipo.esObligatorio,
+        activo: tipo.activo,
+        orden: tipo.orden,
+        descripcion: tipo.descripcion,
+        analyzerId: tipo.analyzerId
+      };
+
+      this.api.actualizarTipoDocumento(tipo.id, request).subscribe({
+        next: (actualizado) => {
+          const index = this.tipos.findIndex(t => t.id === tipo.id);
+          if (index >= 0) this.tipos[index] = actualizado;
+          completadas++;
+          this.verificarGuardadoTiposCompleto(completadas, errores, modificados.length);
+        },
+        error: () => {
+          errores++;
+          completadas++;
+          this.verificarGuardadoTiposCompleto(completadas, errores, modificados.length);
+        }
+      });
+    }
+  }
+
+  private verificarGuardadoTiposCompleto(completadas: number, errores: number, total: number): void {
+    if (completadas < total) return;
+
+    this.guardandoTipos = false;
+    this.tiposOriginales = this.clonarTipos(this.tipos);
+
+    if (errores > 0) {
+      this.snackBar.open(`${errores} tipo(s) no se pudieron guardar`, 'Cerrar', { duration: 5000 });
+      this.cargarTipos();
+    } else {
+      this.snackBar.open(`${total} tipo(s) actualizado(s)`, 'OK', { duration: 2000 });
+    }
+    this.cdr.markForCheck();
+  }
+
+  descartarCambiosTipos(): void {
+    this.tipos = this.clonarTipos(this.tiposOriginales);
+    this.cdr.markForCheck();
   }
 
   // --- Reglas de evaluacion ---
@@ -159,6 +265,7 @@ export class ConfiguracionComponent implements OnInit {
     this.api.getReglas().subscribe({
       next: (reglas) => {
         this.reglas = reglas;
+        this.reglasOriginales = this.clonarReglas(reglas);
         this.cargandoReglas = false;
         this.cdr.markForCheck();
       },
@@ -174,6 +281,18 @@ export class ConfiguracionComponent implements OnInit {
     return this.operadores.find(o => o.valor === operador)?.simbolo ?? '?';
   }
 
+  getOperadorTexto(operador: number): string {
+    const textos: Record<number, string> = {
+      0: 'mayor a',
+      1: 'menor a',
+      2: 'mayor o igual a',
+      3: 'menor o igual a',
+      4: 'igual a',
+      5: 'diferente de'
+    };
+    return textos[operador] ?? '?';
+  }
+
   getResultadoNombre(resultado: number): string {
     return this.resultados.find(r => r.valor === resultado)?.nombre ?? '?';
   }
@@ -182,82 +301,120 @@ export class ConfiguracionComponent implements OnInit {
     return this.resultados.find(r => r.valor === resultado)?.color ?? '';
   }
 
-  actualizarRegla(regla: ReglaEvaluacionConfig): void {
-    this.actualizandoReglaId = regla.id;
-    this.cdr.markForCheck();
-
-    const request: ActualizarReglaRequest = {
-      descripcion: regla.descripcion,
-      operador: regla.operador,
-      valor: regla.valor,
-      peso: regla.peso,
-      resultado: regla.resultado,
-      activa: regla.activa,
-      orden: regla.orden
-    };
-
-    this.api.actualizarRegla(regla.id, request).subscribe({
-      next: (actualizada) => {
-        const index = this.reglas.findIndex(r => r.id === regla.id);
-        if (index >= 0) {
-          this.reglas[index] = actualizada;
-        }
-        this.actualizandoReglaId = null;
-        this.snackBar.open(`${regla.nombre} actualizada`, 'OK', { duration: 2000 });
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.actualizandoReglaId = null;
-        this.snackBar.open(`Error al actualizar ${regla.nombre}`, 'Cerrar', { duration: 5000 });
-        this.cargarReglas();
-      }
-    });
+  generarDescripcion(regla: ReglaEvaluacionConfig): string {
+    const campo = regla.campo;
+    const opTexto = this.getOperadorTexto(regla.operador);
+    return `${campo} ${opTexto} ${regla.valor}`;
   }
 
-  onReglaValorBlur(regla: ReglaEvaluacionConfig, event: Event): void {
+  isReglaModificada(regla: ReglaEvaluacionConfig): boolean {
+    return this.getReglasModificadasIds().has(regla.id);
+  }
+
+  // Cambios locales (sin guardar al backend)
+  onReglaValorChange(regla: ReglaEvaluacionConfig, event: Event): void {
     const input = event.target as HTMLInputElement;
     const nuevoValor = parseFloat(input.value);
-    if (!isNaN(nuevoValor) && nuevoValor !== regla.valor) {
+    if (!isNaN(nuevoValor)) {
       regla.valor = nuevoValor;
-      this.actualizarRegla(regla);
+      regla.descripcion = this.generarDescripcion(regla);
+      this.cdr.markForCheck();
     }
   }
 
-  onReglaPesoBlur(regla: ReglaEvaluacionConfig, event: Event): void {
+  onReglaPesoChange(regla: ReglaEvaluacionConfig, event: Event): void {
     const input = event.target as HTMLInputElement;
     const nuevoPeso = parseFloat(input.value);
-    if (!isNaN(nuevoPeso) && nuevoPeso !== regla.peso) {
+    if (!isNaN(nuevoPeso)) {
       regla.peso = nuevoPeso;
-      this.actualizarRegla(regla);
+      this.cdr.markForCheck();
     }
   }
 
-  onReglaOrdenBlur(regla: ReglaEvaluacionConfig, event: Event): void {
+  onReglaOrdenChange(regla: ReglaEvaluacionConfig, event: Event): void {
     const input = event.target as HTMLInputElement;
     const nuevoOrden = parseInt(input.value, 10);
-    if (!isNaN(nuevoOrden) && nuevoOrden !== regla.orden) {
+    if (!isNaN(nuevoOrden)) {
       regla.orden = nuevoOrden;
-      this.actualizarRegla(regla);
+      this.cdr.markForCheck();
     }
   }
 
   onOperadorChange(regla: ReglaEvaluacionConfig, nuevoOperador: number): void {
-    if (nuevoOperador !== regla.operador) {
-      regla.operador = nuevoOperador;
-      this.actualizarRegla(regla);
-    }
+    regla.operador = nuevoOperador;
+    regla.descripcion = this.generarDescripcion(regla);
+    this.cdr.markForCheck();
   }
 
   onResultadoChange(regla: ReglaEvaluacionConfig, nuevoResultado: number): void {
-    if (nuevoResultado !== regla.resultado) {
-      regla.resultado = nuevoResultado;
-      this.actualizarRegla(regla);
-    }
+    regla.resultado = nuevoResultado;
+    this.cdr.markForCheck();
   }
 
   toggleReglaActiva(regla: ReglaEvaluacionConfig, activa: boolean): void {
     regla.activa = activa;
-    this.actualizarRegla(regla);
+    this.cdr.markForCheck();
+  }
+
+  // Guardar TODAS las reglas modificadas al backend
+  guardarReglas(): void {
+    const modificadas = this.getReglasModificadasIds();
+    if (modificadas.size === 0) return;
+
+    this.guardandoReglas = true;
+    this.cdr.markForCheck();
+
+    const reglasAGuardar = this.reglas.filter(r => modificadas.has(r.id));
+    let completadas = 0;
+    let errores = 0;
+
+    for (const regla of reglasAGuardar) {
+      const request: ActualizarReglaRequest = {
+        descripcion: regla.descripcion,
+        operador: regla.operador,
+        valor: regla.valor,
+        peso: regla.peso,
+        resultado: regla.resultado,
+        activa: regla.activa,
+        orden: regla.orden
+      };
+
+      this.api.actualizarRegla(regla.id, request).subscribe({
+        next: (actualizada) => {
+          const index = this.reglas.findIndex(r => r.id === regla.id);
+          if (index >= 0) {
+            this.reglas[index] = actualizada;
+          }
+          completadas++;
+          this.verificarGuardadoCompleto(completadas, errores, reglasAGuardar.length);
+        },
+        error: () => {
+          errores++;
+          completadas++;
+          this.verificarGuardadoCompleto(completadas, errores, reglasAGuardar.length);
+        }
+      });
+    }
+  }
+
+  private verificarGuardadoCompleto(completadas: number, errores: number, total: number): void {
+    if (completadas < total) return;
+
+    this.guardandoReglas = false;
+    this.reglasOriginales = this.clonarReglas(this.reglas);
+
+    if (errores > 0) {
+      this.snackBar.open(`${errores} regla(s) no se pudieron guardar`, 'Cerrar', { duration: 5000 });
+      this.cargarReglas();
+    } else {
+      this.snackBar.open(`${total} regla(s) guardada(s)`, 'OK', { duration: 2000 });
+    }
+    this.cdr.markForCheck();
+  }
+
+  descartarCambiosReglas(): void {
+    this.reglas = this.clonarReglas(this.reglasOriginales);
+    this.cdr.markForCheck();
   }
 
   abrirNuevaRegla(): void {
@@ -270,6 +427,7 @@ export class ConfiguracionComponent implements OnInit {
         this.api.crearRegla(result).subscribe({
           next: (nueva) => {
             this.reglas = [...this.reglas, nueva];
+            this.reglasOriginales = this.clonarReglas(this.reglas);
             this.snackBar.open(`Regla "${nueva.nombre}" creada`, 'OK', { duration: 3000 });
             this.cdr.markForCheck();
           },
@@ -281,13 +439,38 @@ export class ConfiguracionComponent implements OnInit {
     });
   }
 
-  // --- Parametros de linea de credito ---
+  eliminarRegla(regla: ReglaEvaluacionConfig): void {
+    if (!confirm(`¿Eliminar la regla "${regla.nombre}"?`)) return;
+
+    this.api.eliminarRegla(regla.id).subscribe({
+      next: () => {
+        this.reglas = this.reglas.filter(r => r.id !== regla.id);
+        this.reglasOriginales = this.reglasOriginales.filter(r => r.id !== regla.id);
+        this.snackBar.open(`Regla "${regla.nombre}" eliminada`, 'OK', { duration: 3000 });
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.snackBar.open(`Error al eliminar ${regla.nombre}`, 'Cerrar', { duration: 5000 });
+      }
+    });
+  }
+
+  // --- Parametros de linea de credito: dirty tracking ---
+
+  get hayParametrosLCModificados(): boolean {
+    const campos: (keyof ParametrosLineaCredito)[] = [
+      'porcentajeCapitalTrabajo', 'porcentajePatrimonio', 'porcentajeUtilidadNeta',
+      'pesoRedNivel0', 'pesoRedNivel1', 'pesoRedNivel2'
+    ];
+    return campos.some(c => this.parametrosLC[c] !== this.parametrosLCOriginal[c]);
+  }
 
   cargarParametrosLC(): void {
     this.cargandoLC = true;
     this.api.getParametrosLineaCredito().subscribe({
       next: (params) => {
         this.parametrosLC = params;
+        this.parametrosLCOriginal = { ...params };
         this.cargandoLC = false;
         this.cdr.markForCheck();
       },
@@ -299,18 +482,23 @@ export class ConfiguracionComponent implements OnInit {
     });
   }
 
-  onParametroLCBlur(campo: keyof ParametrosLineaCredito, event: Event): void {
+  onParametroLCChange(campo: keyof ParametrosLineaCredito, event: Event): void {
     const input = event.target as HTMLInputElement;
     const nuevoValor = parseFloat(input.value);
-    if (isNaN(nuevoValor) || nuevoValor === this.parametrosLC[campo]) return;
+    if (!isNaN(nuevoValor)) {
+      this.parametrosLC = { ...this.parametrosLC, [campo]: nuevoValor };
+      this.cdr.markForCheck();
+    }
+  }
 
-    this.parametrosLC = { ...this.parametrosLC, [campo]: nuevoValor };
+  guardarParametrosLC(): void {
     this.guardandoLC = true;
     this.cdr.markForCheck();
 
     this.api.actualizarParametrosLineaCredito(this.parametrosLC).subscribe({
       next: (params) => {
         this.parametrosLC = params;
+        this.parametrosLCOriginal = { ...params };
         this.guardandoLC = false;
         this.snackBar.open('Parametros de linea de credito actualizados', 'OK', { duration: 2000 });
         this.cdr.markForCheck();
@@ -323,18 +511,8 @@ export class ConfiguracionComponent implements OnInit {
     });
   }
 
-  eliminarRegla(regla: ReglaEvaluacionConfig): void {
-    if (!confirm(`¿Eliminar la regla "${regla.nombre}"?`)) return;
-
-    this.api.eliminarRegla(regla.id).subscribe({
-      next: () => {
-        this.reglas = this.reglas.filter(r => r.id !== regla.id);
-        this.snackBar.open(`Regla "${regla.nombre}" eliminada`, 'OK', { duration: 3000 });
-        this.cdr.markForCheck();
-      },
-      error: () => {
-        this.snackBar.open(`Error al eliminar ${regla.nombre}`, 'Cerrar', { duration: 5000 });
-      }
-    });
+  descartarCambiosLC(): void {
+    this.parametrosLC = { ...this.parametrosLCOriginal };
+    this.cdr.markForCheck();
   }
 }

@@ -1060,6 +1060,11 @@ public class ExpedienteService : IExpedienteService
             resultado.Recomendacion = Recomendacion.RevisarManualmente;
     }
 
+    public async Task<EstadisticasExpedientesDto> GetEstadisticasAsync()
+    {
+        return await _expedienteRepo.GetEstadisticasAsync();
+    }
+
     private static string ObtenerContentType(string fileName)
     {
         var extension = Path.GetExtension(fileName).ToLowerInvariant();

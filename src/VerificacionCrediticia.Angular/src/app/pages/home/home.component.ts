@@ -1,55 +1,69 @@
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog } from '@angular/material/dialog';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { VerificacionApiService } from '../../services/verificacion-api.service';
+import { EstadisticasExpedientes, ExpedienteEvaluadoResumen } from '../../models/expediente.model';
 import { NuevoExpedienteDialogComponent } from '../expedientes/nuevo-expediente-dialog.component';
-
-interface EvaluacionReciente {
-  nombre: string;
-  dni: string;
-  empresa: string;
-  ruc: string;
-  score: number;
-  resultado: string;
-}
-
-interface AlertaReciente {
-  mensaje: string;
-  severidad: string;
-  tiempo: string;
-}
-
-interface TendenciaDia {
-  dia: string;
-  evaluaciones: number;
-  porcentaje: number;
-}
 
 @Component({
   selector: 'app-home',
   standalone: true,
   imports: [
     MatCardModule, MatButtonModule, MatIconModule,
-    MatTableModule, MatChipsModule, MatProgressBarModule,
+    MatTableModule, MatProgressBarModule, MatProgressSpinnerModule,
     DatePipe, DecimalPipe
   ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class HomeComponent {
+export class HomeComponent implements OnInit {
   private dialog = inject(MatDialog);
   private api = inject(VerificacionApiService);
   private router = inject(Router);
+  private cdr = inject(ChangeDetectorRef);
 
   today = new Date();
+  cargando = true;
+
+  stats: EstadisticasExpedientes = {
+    totalExpedientes: 0,
+    evaluados: 0,
+    enProceso: 0,
+    aprobados: 0,
+    enRevision: 0,
+    rechazados: 0,
+    scorePromedio: 0,
+    recientes: []
+  };
+
+  displayedColumns = ['descripcion', 'empresa', 'score', 'resultado'];
+
+  ngOnInit(): void {
+    this.cargarEstadisticas();
+  }
+
+  cargarEstadisticas(): void {
+    this.cargando = true;
+    this.api.getEstadisticas().subscribe({
+      next: (stats) => {
+        this.stats = stats;
+        this.cargando = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.cargando = false;
+        this.cdr.markForCheck();
+      }
+    });
+  }
 
   nuevoExpediente(): void {
     const dialogRef = this.dialog.open(NuevoExpedienteDialogComponent, {
@@ -67,44 +81,27 @@ export class HomeComponent {
     });
   }
 
-  stats = {
-    evaluacionesHoy: 47,
-    aprobadas: 28,
-    enRevision: 12,
-    rechazadas: 7,
-    porcentajeAprobacion: 60,
-    porcentajeRevision: 25,
-    porcentajeRechazo: 15,
-    evaluacionesMes: 892,
-    scorePromedio: 72.4,
-    empresasUnicas: 234
-  };
+  verExpediente(exp: ExpedienteEvaluadoResumen): void {
+    this.router.navigate(['/expediente', exp.id]);
+  }
 
-  tendencia: TendenciaDia[] = [
-    { dia: 'Lunes', evaluaciones: 42, porcentaje: 70 },
-    { dia: 'Martes', evaluaciones: 38, porcentaje: 63 },
-    { dia: 'Miercoles', evaluaciones: 55, porcentaje: 92 },
-    { dia: 'Jueves', evaluaciones: 60, porcentaje: 100 },
-    { dia: 'Viernes', evaluaciones: 51, porcentaje: 85 },
-    { dia: 'Sabado', evaluaciones: 12, porcentaje: 20 },
-    { dia: 'Hoy', evaluaciones: 47, porcentaje: 78 }
-  ];
+  get porcentajeAprobacion(): number {
+    return this.stats.evaluados > 0
+      ? Math.round((this.stats.aprobados / this.stats.evaluados) * 100)
+      : 0;
+  }
 
-  evaluacionesRecientes: EvaluacionReciente[] = [
-    { nombre: 'Carlos Mendoza', dni: '45678912', empresa: 'Tech Solutions SAC', ruc: '20512345678', score: 85.5, resultado: 'APROBADO' },
-    { nombre: 'Ana Torres', dni: '78912345', empresa: 'Comercial Norte EIRL', ruc: '20498765432', score: 45.2, resultado: 'RECHAZADO' },
-    { nombre: 'Jose Garcia', dni: '12345678', empresa: 'Distribuidora Sur SAC', ruc: '20567891234', score: 68.0, resultado: 'REVISION' },
-    { nombre: 'Maria Lopez', dni: '89123456', empresa: 'Importaciones Lima SAC', ruc: '20612345789', score: 92.3, resultado: 'APROBADO' },
-    { nombre: 'Pedro Sanchez', dni: '56789123', empresa: 'Servicios Globales EIRL', ruc: '20789456123', score: 71.8, resultado: 'REVISION' }
-  ];
-  displayedColumns = ['nombre', 'empresa', 'score', 'resultado'];
+  get porcentajeRevision(): number {
+    return this.stats.evaluados > 0
+      ? Math.round((this.stats.enRevision / this.stats.evaluados) * 100)
+      : 0;
+  }
 
-  alertasRecientes: AlertaReciente[] = [
-    { mensaje: 'Empresa con deuda castigada detectada: Comercial Norte EIRL', severidad: 'error', tiempo: '42 min' },
-    { mensaje: 'Score bajo en solicitante relacionado: Pedro Quispe', severidad: 'warning', tiempo: '1 hora' },
-    { mensaje: 'Morosidad detectada en red de relaciones', severidad: 'warning', tiempo: '2 horas' },
-    { mensaje: 'Empresa inactiva en SUNAT: Servicios XYZ SAC', severidad: 'error', tiempo: '3 horas' }
-  ];
+  get porcentajeRechazo(): number {
+    return this.stats.evaluados > 0
+      ? Math.round((this.stats.rechazados / this.stats.evaluados) * 100)
+      : 0;
+  }
 
   getScoreColor(score: number): string {
     if (score >= 80) return 'success';
@@ -112,11 +109,20 @@ export class HomeComponent {
     return 'error';
   }
 
-  getResultColor(resultado: string): string {
-    switch (resultado) {
-      case 'APROBADO': return 'success';
-      case 'REVISION': return 'warning';
-      case 'RECHAZADO': return 'error';
+  getResultadoTexto(recomendacion: number): string {
+    switch (recomendacion) {
+      case 0: return 'APROBADO';
+      case 1: return 'REVISION';
+      case 2: return 'RECHAZADO';
+      default: return '?';
+    }
+  }
+
+  getResultadoColor(recomendacion: number): string {
+    switch (recomendacion) {
+      case 0: return 'success';
+      case 1: return 'warning';
+      case 2: return 'error';
       default: return '';
     }
   }

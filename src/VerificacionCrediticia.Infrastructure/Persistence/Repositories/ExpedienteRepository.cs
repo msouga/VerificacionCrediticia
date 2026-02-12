@@ -3,6 +3,7 @@ using VerificacionCrediticia.Core.DTOs;
 using VerificacionCrediticia.Core.Entities;
 using VerificacionCrediticia.Core.Enums;
 using VerificacionCrediticia.Core.Interfaces;
+using Recomendacion = VerificacionCrediticia.Core.Enums.Recomendacion;
 
 namespace VerificacionCrediticia.Infrastructure.Persistence.Repositories;
 
@@ -149,10 +150,67 @@ public class ExpedienteRepository : IExpedienteRepository
                     d.Estado == EstadoDocumento.Procesado
                     && d.TipoDocumentoId.HasValue
                     && tipoDocumentoObligatorioIds.Contains(d.TipoDocumentoId.Value)),
-                TotalDocumentosObligatorios = tipoDocumentoObligatorioIds.Count
+                TotalDocumentosObligatorios = tipoDocumentoObligatorioIds.Count,
+                Recomendacion = e.ResultadoEvaluacion != null ? e.ResultadoEvaluacion.Recomendacion : null,
+                ScoreFinal = e.ResultadoEvaluacion != null ? e.ResultadoEvaluacion.ScoreFinal : null
             })
             .ToListAsync(cancellationToken);
 
         return (items, total);
+    }
+
+    public async Task<EstadisticasExpedientesDto> GetEstadisticasAsync(CancellationToken cancellationToken = default)
+    {
+        var totalExpedientes = await _context.Expedientes.CountAsync(cancellationToken);
+
+        var evaluados = await _context.Expedientes
+            .Where(e => e.Estado == EstadoExpediente.Evaluado)
+            .CountAsync(cancellationToken);
+
+        var enProceso = await _context.Expedientes
+            .Where(e => e.Estado != EstadoExpediente.Evaluado)
+            .CountAsync(cancellationToken);
+
+        var resultados = await _context.Set<ResultadoEvaluacionPersistido>()
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var aprobados = resultados.Count(r => r.Recomendacion == Recomendacion.Aprobar);
+        var enRevision = resultados.Count(r => r.Recomendacion == Recomendacion.RevisarManualmente);
+        var rechazados = resultados.Count(r => r.Recomendacion == Recomendacion.Rechazar);
+        var scorePromedio = resultados.Count > 0 ? resultados.Average(r => r.ScoreFinal) : 0m;
+
+        var recientes = await _context.Expedientes
+            .AsNoTracking()
+            .Include(e => e.ResultadoEvaluacion)
+            .Where(e => e.Estado == EstadoExpediente.Evaluado && e.ResultadoEvaluacion != null)
+            .OrderByDescending(e => e.ResultadoEvaluacion!.FechaEvaluacion)
+            .Take(5)
+            .Select(e => new ExpedienteEvaluadoResumenDto
+            {
+                Id = e.Id,
+                Descripcion = e.Descripcion,
+                DniSolicitante = e.DniSolicitante,
+                NombresSolicitante = e.NombresSolicitante,
+                ApellidosSolicitante = e.ApellidosSolicitante,
+                RucEmpresa = e.RucEmpresa,
+                RazonSocialEmpresa = e.RazonSocialEmpresa,
+                ScoreFinal = e.ResultadoEvaluacion!.ScoreFinal,
+                Recomendacion = (int)e.ResultadoEvaluacion.Recomendacion,
+                FechaEvaluacion = e.ResultadoEvaluacion.FechaEvaluacion
+            })
+            .ToListAsync(cancellationToken);
+
+        return new EstadisticasExpedientesDto
+        {
+            TotalExpedientes = totalExpedientes,
+            Evaluados = evaluados,
+            EnProceso = enProceso,
+            Aprobados = aprobados,
+            EnRevision = enRevision,
+            Rechazados = rechazados,
+            ScorePromedio = Math.Round(scorePromedio, 1),
+            Recientes = recientes
+        };
     }
 }

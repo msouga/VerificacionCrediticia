@@ -18,4 +18,5 @@ public interface IExpedienteRepository
     Task<List<Expediente>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<(List<Expediente> Items, int Total)> GetPaginadoAsync(int pagina, int tamanoPagina, CancellationToken cancellationToken = default);
     Task<(List<ExpedienteResumenDto> Items, int Total)> GetPaginadoResumenAsync(int pagina, int tamanoPagina, List<int> tipoDocumentoObligatorioIds, CancellationToken cancellationToken = default);
+    Task<EstadisticasExpedientesDto> GetEstadisticasAsync(CancellationToken cancellationToken = default);
 }

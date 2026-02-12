@@ -5,7 +5,8 @@ import { environment } from '../environments/environment';
 import {
   Expediente, CrearExpedienteRequest, ActualizarExpedienteRequest,
   TipoDocumento, ListaExpedientesResponse,
-  DocumentoProcesadoResumen, ProgresoEvaluacion
+  DocumentoProcesadoResumen, ProgresoEvaluacion,
+  EstadisticasExpedientes
 } from '../models/expediente.model';
 import {
   TipoDocumentoConfig, ActualizarTipoDocumentoRequest,
@@ -116,6 +117,13 @@ export class VerificacionApiService {
     return this.http.put<ParametrosLineaCredito>(
       `${this.baseUrl}/api/configuracion/linea-credito`,
       params
+    );
+  }
+
+  // Estadisticas del dashboard
+  getEstadisticas(): Observable<EstadisticasExpedientes> {
+    return this.http.get<EstadisticasExpedientes>(
+      `${this.baseUrl}/api/expedientes/estadisticas`
     );
   }
 

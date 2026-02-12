@@ -14,4 +14,6 @@ public class ExpedienteResumenDto
     public DateTime FechaCreacion { get; set; }
     public int DocumentosObligatoriosCompletos { get; set; }
     public int TotalDocumentosObligatorios { get; set; }
+    public Recomendacion? Recomendacion { get; set; }
+    public decimal? ScoreFinal { get; set; }
 }
