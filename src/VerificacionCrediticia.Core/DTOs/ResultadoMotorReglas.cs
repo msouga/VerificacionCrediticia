@@ -8,6 +8,10 @@ public class ResultadoMotorReglas
     public decimal PuntajeFinal { get; set; }
     public NivelRiesgo NivelRiesgo { get; set; }
     public List<ResultadoReglaAplicada> ReglasAplicadas { get; set; } = new();
+    public List<ResultadoValidacionCruzada> ValidacionesCruzadas { get; set; } = new();
+    public RecomendacionLineaCredito? LineaCredito { get; set; }
+    public ResultadoExploracionDto? ExploracionRed { get; set; }
+    public decimal PenalidadRed { get; set; }
     public string Resumen { get; set; } = string.Empty;
     public DateTime FechaEvaluacion { get; set; } = DateTime.UtcNow;
 }

@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using VerificacionCrediticia.Core.DTOs;
 using VerificacionCrediticia.Core.Entities;
 using VerificacionCrediticia.Core.Enums;
 using VerificacionCrediticia.Core.Interfaces;
+using VerificacionCrediticia.Infrastructure.Persistence;
 
 namespace VerificacionCrediticia.API.Controllers;
 
@@ -12,15 +14,18 @@ public class ConfiguracionController : ControllerBase
 {
     private readonly ITipoDocumentoRepository _tipoDocumentoRepo;
     private readonly IReglaEvaluacionRepository _reglaRepo;
+    private readonly ApplicationDbContext _context;
     private readonly ILogger<ConfiguracionController> _logger;
 
     public ConfiguracionController(
         ITipoDocumentoRepository tipoDocumentoRepo,
         IReglaEvaluacionRepository reglaRepo,
+        ApplicationDbContext context,
         ILogger<ConfiguracionController> logger)
     {
         _tipoDocumentoRepo = tipoDocumentoRepo;
         _reglaRepo = reglaRepo;
+        _context = context;
         _logger = logger;
     }
 
@@ -173,6 +178,56 @@ public class ConfiguracionController : ControllerBase
         _logger.LogInformation("Regla eliminada: {Id}", id);
 
         return NoContent();
+    }
+
+    // --- Parametros de Linea de Credito ---
+
+    [HttpGet("linea-credito")]
+    [ProducesResponseType(typeof(ParametroLineaCredito), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ParametroLineaCredito>> GetParametrosLineaCredito()
+    {
+        var parametros = await _context.ParametrosLineaCredito.FirstOrDefaultAsync();
+        if (parametros == null)
+        {
+            parametros = new ParametroLineaCredito
+            {
+                PorcentajeCapitalTrabajo = 20m,
+                PorcentajePatrimonio = 30m,
+                PorcentajeUtilidadNeta = 100m
+            };
+            _context.ParametrosLineaCredito.Add(parametros);
+            await _context.SaveChangesAsync();
+        }
+        return Ok(parametros);
+    }
+
+    [HttpPut("linea-credito")]
+    [ProducesResponseType(typeof(ParametroLineaCredito), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ParametroLineaCredito>> ActualizarParametrosLineaCredito(
+        [FromBody] ParametroLineaCredito request)
+    {
+        var parametros = await _context.ParametrosLineaCredito.FirstOrDefaultAsync();
+        if (parametros == null)
+        {
+            parametros = new ParametroLineaCredito();
+            _context.ParametrosLineaCredito.Add(parametros);
+        }
+
+        parametros.PorcentajeCapitalTrabajo = request.PorcentajeCapitalTrabajo;
+        parametros.PorcentajePatrimonio = request.PorcentajePatrimonio;
+        parametros.PorcentajeUtilidadNeta = request.PorcentajeUtilidadNeta;
+        parametros.PesoRedNivel0 = request.PesoRedNivel0;
+        parametros.PesoRedNivel1 = request.PesoRedNivel1;
+        parametros.PesoRedNivel2 = request.PesoRedNivel2;
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Parametros actualizados: CapitalTrabajo={CT}%, Patrimonio={P}%, UtilidadNeta={UN}%, RedN0={N0}%, RedN1={N1}%, RedN2={N2}%",
+            parametros.PorcentajeCapitalTrabajo, parametros.PorcentajePatrimonio, parametros.PorcentajeUtilidadNeta,
+            parametros.PesoRedNivel0, parametros.PesoRedNivel1, parametros.PesoRedNivel2);
+
+        return Ok(parametros);
     }
 
     private static ReglaEvaluacionDto MapToDto(ReglaEvaluacion regla) => new()

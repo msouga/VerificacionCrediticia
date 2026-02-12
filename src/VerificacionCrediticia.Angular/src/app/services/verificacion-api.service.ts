@@ -9,7 +9,8 @@ import {
 } from '../models/expediente.model';
 import {
   TipoDocumentoConfig, ActualizarTipoDocumentoRequest,
-  ReglaEvaluacionConfig, CrearReglaRequest, ActualizarReglaRequest
+  ReglaEvaluacionConfig, CrearReglaRequest, ActualizarReglaRequest,
+  ParametrosLineaCredito
 } from '../models/configuracion.model';
 
 @Injectable({ providedIn: 'root' })
@@ -104,6 +105,20 @@ export class VerificacionApiService {
     );
   }
 
+  // Parametros de linea de credito
+  getParametrosLineaCredito(): Observable<ParametrosLineaCredito> {
+    return this.http.get<ParametrosLineaCredito>(
+      `${this.baseUrl}/api/configuracion/linea-credito`
+    );
+  }
+
+  actualizarParametrosLineaCredito(params: ParametrosLineaCredito): Observable<ParametrosLineaCredito> {
+    return this.http.put<ParametrosLineaCredito>(
+      `${this.baseUrl}/api/configuracion/linea-credito`,
+      params
+    );
+  }
+
   // Upload simple (sin SSE) - solo sube archivo al blob
   subirDocumento(
     expedienteId: number,
@@ -130,6 +145,21 @@ export class VerificacionApiService {
     return this.http.post<DocumentoProcesadoResumen[]>(
       `${this.baseUrl}/api/expedientes/${expedienteId}/documentos/bulk`,
       formData
+    );
+  }
+
+  // Descartar documento en error
+  descartarDocumento(expedienteId: number, documentoId: number): Observable<void> {
+    return this.http.delete<void>(
+      `${this.baseUrl}/api/expedientes/${expedienteId}/documentos/${documentoId}`
+    );
+  }
+
+  // Aceptar documento en error como correcto y re-encolar para procesamiento
+  aceptarDocumento(expedienteId: number, documentoId: number): Observable<DocumentoProcesadoResumen> {
+    return this.http.post<DocumentoProcesadoResumen>(
+      `${this.baseUrl}/api/expedientes/${expedienteId}/documentos/${documentoId}/aceptar`,
+      {}
     );
   }
 

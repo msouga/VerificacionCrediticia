@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using VerificacionCrediticia.Core.DTOs;
 using VerificacionCrediticia.Core.Entities;
+using VerificacionCrediticia.Core.Enums;
 using VerificacionCrediticia.Core.Interfaces;
 
 namespace VerificacionCrediticia.Infrastructure.Persistence.Repositories;
@@ -116,8 +118,39 @@ public class ExpedienteRepository : IExpedienteRepository
             .OrderByDescending(e => e.FechaCreacion)
             .Skip((pagina - 1) * tamanoPagina)
             .Take(tamanoPagina)
-            .Include(e => e.Documentos)
-                .ThenInclude(d => d.TipoDocumento)
+            .ToListAsync(cancellationToken);
+
+        return (items, total);
+    }
+
+    public async Task<(List<ExpedienteResumenDto> Items, int Total)> GetPaginadoResumenAsync(
+        int pagina, int tamanoPagina, List<int> tipoDocumentoObligatorioIds,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.Expedientes.AsNoTracking();
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(e => e.FechaCreacion)
+            .Skip((pagina - 1) * tamanoPagina)
+            .Take(tamanoPagina)
+            .Select(e => new ExpedienteResumenDto
+            {
+                Id = e.Id,
+                Descripcion = e.Descripcion,
+                DniSolicitante = e.DniSolicitante,
+                NombresSolicitante = e.NombresSolicitante,
+                RucEmpresa = e.RucEmpresa,
+                RazonSocialEmpresa = e.RazonSocialEmpresa,
+                Estado = e.Estado,
+                FechaCreacion = e.FechaCreacion,
+                DocumentosObligatoriosCompletos = e.Documentos.Count(d =>
+                    d.Estado == EstadoDocumento.Procesado
+                    && d.TipoDocumentoId.HasValue
+                    && tipoDocumentoObligatorioIds.Contains(d.TipoDocumentoId.Value)),
+                TotalDocumentosObligatorios = tipoDocumentoObligatorioIds.Count
+            })
             .ToListAsync(cancellationToken);
 
         return (items, total);

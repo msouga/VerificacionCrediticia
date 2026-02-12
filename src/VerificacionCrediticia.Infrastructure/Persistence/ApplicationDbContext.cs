@@ -16,6 +16,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<DocumentoProcesado> DocumentosProcesados { get; set; }
     public DbSet<ResultadoEvaluacionPersistido> ResultadosEvaluacion { get; set; }
     public DbSet<ReglaEvaluacion> ReglasEvaluacion { get; set; }
+    public DbSet<ParametroLineaCredito> ParametrosLineaCredito { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -159,6 +160,32 @@ public class ApplicationDbContext : DbContext
 
             entity.Property(r => r.Resultado)
                 .HasConversion<int>();
+        });
+
+        // Configuración de ParametroLineaCredito
+        modelBuilder.Entity<ParametroLineaCredito>(entity =>
+        {
+            entity.ToTable("ParametrosLineaCredito");
+            entity.HasKey(p => p.Id);
+
+            entity.Property(p => p.PorcentajeCapitalTrabajo).HasColumnType("decimal(5,2)");
+            entity.Property(p => p.PorcentajePatrimonio).HasColumnType("decimal(5,2)");
+            entity.Property(p => p.PorcentajeUtilidadNeta).HasColumnType("decimal(5,2)");
+            entity.Property(p => p.PesoRedNivel0).HasColumnType("decimal(5,2)");
+            entity.Property(p => p.PesoRedNivel1).HasColumnType("decimal(5,2)");
+            entity.Property(p => p.PesoRedNivel2).HasColumnType("decimal(5,2)");
+
+            // Seed con valores por defecto
+            entity.HasData(new ParametroLineaCredito
+            {
+                Id = 1,
+                PorcentajeCapitalTrabajo = 20m,
+                PorcentajePatrimonio = 30m,
+                PorcentajeUtilidadNeta = 100m,
+                PesoRedNivel0 = 100m,
+                PesoRedNivel1 = 50m,
+                PesoRedNivel2 = 25m
+            });
         });
 
         // Configuraciones adicionales

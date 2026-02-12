@@ -49,8 +49,8 @@ public class MotorReglasService : IMotorReglasService
             var resultadoRegla = EvaluarReglaIndividual(regla, datos);
             reglasAplicadas.Add(resultadoRegla);
 
-            // Si es un rechazo inmediato, guardarlo
-            if (!resultadoRegla.Cumplida && regla.Resultado == ResultadoRegla.Rechazar)
+            // Si la condicion de rechazo SE CUMPLE, es rechazo inmediato
+            if (resultadoRegla.Cumplida && regla.Resultado == ResultadoRegla.Rechazar)
             {
                 rechazosInmediatos.Add(resultadoRegla);
             }
@@ -200,23 +200,18 @@ public class MotorReglasService : IMotorReglasService
             return;
         }
 
-        // Calcular porcentaje de cumplimiento ponderado
-        var reglasPorResultado = reglasAplicadas
+        // Calcular peso favorable: condiciones positivas cumplidas + condiciones de riesgo NO cumplidas
+        var pesoFavorable = reglasAplicadas
             .Where(r => r.Peso > 0)
-            .GroupBy(r => r.ResultadoRegla)
-            .ToList();
-
-        var pesoTotalAprobar = reglasPorResultado
-            .Where(g => g.Key == ResultadoRegla.Aprobar)
-            .SelectMany(g => g)
-            .Where(r => r.Cumplida)
+            .Where(r =>
+                (r.ResultadoRegla == ResultadoRegla.Aprobar && r.Cumplida) ||
+                (r.ResultadoRegla == ResultadoRegla.Revisar && !r.Cumplida) ||
+                (r.ResultadoRegla == ResultadoRegla.Rechazar && !r.Cumplida))
             .Sum(r => r.Peso);
 
-        var pesoTotalRevisar = reglasPorResultado
-            .Where(g => g.Key == ResultadoRegla.Revisar)
-            .SelectMany(g => g)
-            .Where(r => !r.Cumplida)
-            .Sum(r => r.Peso);
+        // Reglas de revision cuya condicion de riesgo SI se cumple
+        var hayRevisiones = reglasAplicadas
+            .Any(r => r.Peso > 0 && r.ResultadoRegla == ResultadoRegla.Revisar && r.Cumplida);
 
         var pesoTotal = reglasAplicadas.Where(r => r.Peso > 0).Sum(r => r.Peso);
 
@@ -226,14 +221,14 @@ public class MotorReglasService : IMotorReglasService
             return;
         }
 
-        var porcentajeCumplimiento = (pesoTotalAprobar / pesoTotal) * 100;
+        var porcentajeFavorable = (pesoFavorable / pesoTotal) * 100;
 
         // Determinar recomendación basada en porcentaje
-        resultado.Recomendacion = porcentajeCumplimiento switch
+        resultado.Recomendacion = porcentajeFavorable switch
         {
-            >= 80m => Recomendacion.Aprobar,
-            >= 50m when pesoTotalRevisar > 0 => Recomendacion.RevisarManualmente,
-            >= 50m => Recomendacion.Aprobar,
+            >= 80m when !hayRevisiones => Recomendacion.Aprobar,
+            >= 80m => Recomendacion.RevisarManualmente,
+            >= 50m => Recomendacion.RevisarManualmente,
             _ => Recomendacion.Rechazar
         };
     }
@@ -254,10 +249,16 @@ public class MotorReglasService : IMotorReglasService
         {
             var puntosPorRegla = regla.ResultadoRegla switch
             {
+                // Aprobar: cumplida = bueno (condicion positiva se cumple)
                 ResultadoRegla.Aprobar when regla.Cumplida => regla.Peso,
-                ResultadoRegla.Revisar when regla.Cumplida => regla.Peso * 0.7m, // Penalización por revisar
-                ResultadoRegla.Rechazar when !regla.Cumplida => 0m, // No suma puntos si falla
-                _ => regla.Peso * 0.3m // Puntos parciales
+                ResultadoRegla.Aprobar => regla.Peso * 0.3m,
+                // Revisar: cumplida = malo (condicion de riesgo se cumple)
+                ResultadoRegla.Revisar when !regla.Cumplida => regla.Peso,
+                ResultadoRegla.Revisar => regla.Peso * 0.3m,
+                // Rechazar: cumplida = malo (condicion de rechazo se cumple)
+                ResultadoRegla.Rechazar when !regla.Cumplida => regla.Peso,
+                ResultadoRegla.Rechazar => 0m,
+                _ => 0m
             };
 
             puntajeAcumulado += puntosPorRegla;

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using VerificacionCrediticia.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using VerificacionCrediticia.Infrastructure.Persistence;
 namespace VerificacionCrediticia.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260211222917_AddParametrosLineaCredito")]
+    partial class AddParametrosLineaCredito
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -138,15 +141,6 @@ namespace VerificacionCrediticia.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("PesoRedNivel0")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<decimal>("PesoRedNivel1")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<decimal>("PesoRedNivel2")
-                        .HasColumnType("decimal(5,2)");
-
                     b.Property<decimal>("PorcentajeCapitalTrabajo")
                         .HasColumnType("decimal(5,2)");
 
@@ -164,9 +158,6 @@ namespace VerificacionCrediticia.Infrastructure.Migrations
                         new
                         {
                             Id = 1,
-                            PesoRedNivel0 = 100m,
-                            PesoRedNivel1 = 50m,
-                            PesoRedNivel2 = 25m,
                             PorcentajeCapitalTrabajo = 20m,
                             PorcentajePatrimonio = 30m,
                             PorcentajeUtilidadNeta = 100m

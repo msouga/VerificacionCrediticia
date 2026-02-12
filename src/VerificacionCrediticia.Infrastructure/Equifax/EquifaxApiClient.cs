@@ -90,23 +90,47 @@ public class EquifaxApiClient : IEquifaxApiClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
+        // === DEBUG: Capturar request completo ===
+        _logger.LogDebug("=== EQUIFAX REQUEST ===");
+        _logger.LogDebug("URL: POST {Url}", url);
+        _logger.LogDebug("Request Headers:");
+        foreach (var h in request.Headers)
+            _logger.LogDebug("  {Key}: {Value}", h.Key, string.Join(", ", h.Value));
+        if (request.Content != null)
+        {
+            foreach (var h in request.Content.Headers)
+                _logger.LogDebug("  {Key}: {Value}", h.Key, string.Join(", ", h.Value));
+        }
+        _logger.LogDebug("Request Body:\n{Body}", jsonBody);
+
         var response = await _httpClient.SendAsync(request, cancellationToken);
+
+        // === DEBUG: Capturar response completo ===
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        _logger.LogDebug("=== EQUIFAX RESPONSE ===");
+        _logger.LogDebug("Status: {StatusCode} ({StatusInt})", response.StatusCode, (int)response.StatusCode);
+        _logger.LogDebug("Response Headers:");
+        foreach (var h in response.Headers)
+            _logger.LogDebug("  {Key}: {Value}", h.Key, string.Join(", ", h.Value));
+        foreach (var h in response.Content.Headers)
+            _logger.LogDebug("  {Key}: {Value}", h.Key, string.Join(", ", h.Value));
+        _logger.LogDebug("Response Body ({Length} chars):\n{Body}",
+            responseBody.Length, responseBody.Length > 10000 ? responseBody[..10000] + "..." : responseBody);
 
         if (!response.IsSuccessStatusCode)
         {
-            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError(
-                "Equifax respondio con {StatusCode}: {ErrorBody}",
-                (int)response.StatusCode,
-                errorBody);
             return null;
         }
 
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        var content = responseBody;
         var equifaxResponse = JsonSerializer.Deserialize<EquifaxCreditReportResponse>(content, _jsonOptions);
 
         if (equifaxResponse?.Applicants?.PrimaryConsumer?.InterconnectResponse == null)
         {
+            _logger.LogDebug(
+                "Equifax respuesta parseada sin InterconnectResponse. Applicants={A}, PrimaryConsumer={PC}",
+                equifaxResponse?.Applicants != null,
+                equifaxResponse?.Applicants?.PrimaryConsumer != null);
             return null;
         }
 

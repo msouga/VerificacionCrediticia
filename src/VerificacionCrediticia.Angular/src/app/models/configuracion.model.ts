@@ -50,3 +50,13 @@ export interface ActualizarReglaRequest {
   activa: boolean;
   orden: number;
 }
+
+export interface ParametrosLineaCredito {
+  id?: number;
+  porcentajeCapitalTrabajo: number;
+  porcentajePatrimonio: number;
+  porcentajeUtilidadNeta: number;
+  pesoRedNivel0: number;
+  pesoRedNivel1: number;
+  pesoRedNivel2: number;
+}

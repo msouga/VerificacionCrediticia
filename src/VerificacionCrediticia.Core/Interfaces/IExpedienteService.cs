@@ -14,4 +14,6 @@ public interface IExpedienteService
     Task<ExpedienteDto> EvaluarExpedienteAsync(int expedienteId, IProgress<ProgresoEvaluacionDto>? progreso = null, CancellationToken cancellationToken = default);
     Task<List<TipoDocumentoDto>> GetTiposDocumentoAsync();
     Task<List<DocumentoProcesadoResumenDto>> SubirDocumentosBulkAsync(int expedienteId, List<(Stream Stream, string FileName)> archivos);
+    Task DescartarDocumentoAsync(int expedienteId, int documentoId);
+    Task<DocumentoProcesadoResumenDto> AceptarDocumentoAsync(int expedienteId, int documentoId);
 }

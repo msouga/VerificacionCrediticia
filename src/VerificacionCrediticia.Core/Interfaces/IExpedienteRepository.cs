@@ -1,3 +1,4 @@
+using VerificacionCrediticia.Core.DTOs;
 using VerificacionCrediticia.Core.Entities;
 
 namespace VerificacionCrediticia.Core.Interfaces;
@@ -16,4 +17,5 @@ public interface IExpedienteRepository
     Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default);
     Task<List<Expediente>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<(List<Expediente> Items, int Total)> GetPaginadoAsync(int pagina, int tamanoPagina, CancellationToken cancellationToken = default);
+    Task<(List<ExpedienteResumenDto> Items, int Total)> GetPaginadoResumenAsync(int pagina, int tamanoPagina, List<int> tipoDocumentoObligatorioIds, CancellationToken cancellationToken = default);
 }

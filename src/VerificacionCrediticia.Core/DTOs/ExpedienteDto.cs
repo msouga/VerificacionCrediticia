@@ -37,6 +37,10 @@ public class ResultadoEvaluacionExpedienteDto
     public NivelRiesgo NivelRiesgo { get; set; }
     public string Resumen { get; set; } = string.Empty;
     public List<ReglaAplicadaExpedienteDto> ReglasAplicadas { get; set; } = new();
+    public List<ResultadoValidacionCruzada> ValidacionesCruzadas { get; set; } = new();
+    public RecomendacionLineaCredito? LineaCredito { get; set; }
+    public ResultadoExploracionDto? ExploracionRed { get; set; }
+    public decimal PenalidadRed { get; set; }
     public DateTime FechaEvaluacion { get; set; }
 }
 

@@ -213,4 +213,123 @@
       </mat-card-content>
     </mat-card>
   }
+
+  <h2 class="seccion-linea-credito">Parametros de Linea de Credito</h2>
+
+  @if (cargandoLC) {
+    <div class="spinner-container">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+  } @else {
+    <mat-card>
+      <mat-card-content>
+        <p class="lc-descripcion">
+          La linea de credito recomendada se calcula como el minimo entre estos tres limites.
+          Ajuste los porcentajes segun la politica crediticia.
+        </p>
+        <div class="lc-params-grid">
+          <div class="lc-param">
+            <label>% Capital de Trabajo</label>
+            <div class="lc-input-row">
+              <input
+                type="number"
+                class="lc-input"
+                [value]="parametrosLC.porcentajeCapitalTrabajo"
+                [disabled]="guardandoLC"
+                (blur)="onParametroLCBlur('porcentajeCapitalTrabajo', $event)"
+                min="0"
+                max="100"
+                step="1">
+              <span class="lc-suffix">%</span>
+            </div>
+          </div>
+          <div class="lc-param">
+            <label>% Patrimonio</label>
+            <div class="lc-input-row">
+              <input
+                type="number"
+                class="lc-input"
+                [value]="parametrosLC.porcentajePatrimonio"
+                [disabled]="guardandoLC"
+                (blur)="onParametroLCBlur('porcentajePatrimonio', $event)"
+                min="0"
+                max="100"
+                step="1">
+              <span class="lc-suffix">%</span>
+            </div>
+          </div>
+          <div class="lc-param">
+            <label>% Utilidad Neta</label>
+            <div class="lc-input-row">
+              <input
+                type="number"
+                class="lc-input"
+                [value]="parametrosLC.porcentajeUtilidadNeta"
+                [disabled]="guardandoLC"
+                (blur)="onParametroLCBlur('porcentajeUtilidadNeta', $event)"
+                min="0"
+                max="100"
+                step="1">
+              <span class="lc-suffix">%</span>
+            </div>
+          </div>
+        </div>
+        <h4 class="lc-subseccion">Pesos de Red de Relaciones</h4>
+        <p class="lc-descripcion">
+          Define cuanto impacta el riesgo detectado en la red de relaciones sobre el score,
+          segun el nivel de profundidad del nodo.
+        </p>
+        <div class="lc-params-grid">
+          <div class="lc-param">
+            <label>% Nivel 0 (solicitante)</label>
+            <div class="lc-input-row">
+              <input
+                type="number"
+                class="lc-input"
+                [value]="parametrosLC.pesoRedNivel0"
+                [disabled]="guardandoLC"
+                (blur)="onParametroLCBlur('pesoRedNivel0', $event)"
+                min="0"
+                max="100"
+                step="1">
+              <span class="lc-suffix">%</span>
+            </div>
+          </div>
+          <div class="lc-param">
+            <label>% Nivel 1 (conexiones directas)</label>
+            <div class="lc-input-row">
+              <input
+                type="number"
+                class="lc-input"
+                [value]="parametrosLC.pesoRedNivel1"
+                [disabled]="guardandoLC"
+                (blur)="onParametroLCBlur('pesoRedNivel1', $event)"
+                min="0"
+                max="100"
+                step="1">
+              <span class="lc-suffix">%</span>
+            </div>
+          </div>
+          <div class="lc-param">
+            <label>% Nivel 2 (conexiones indirectas)</label>
+            <div class="lc-input-row">
+              <input
+                type="number"
+                class="lc-input"
+                [value]="parametrosLC.pesoRedNivel2"
+                [disabled]="guardandoLC"
+                (blur)="onParametroLCBlur('pesoRedNivel2', $event)"
+                min="0"
+                max="100"
+                step="1">
+              <span class="lc-suffix">%</span>
+            </div>
+          </div>
+        </div>
+        @if (guardandoLC) {
+          <mat-spinner diameter="20" class="lc-saving-spinner"></mat-spinner>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
 </div>

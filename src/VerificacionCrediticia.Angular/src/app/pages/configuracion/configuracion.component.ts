@@ -16,7 +16,8 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { VerificacionApiService } from '../../services/verificacion-api.service';
 import {
   TipoDocumentoConfig, ActualizarTipoDocumentoRequest,
-  ReglaEvaluacionConfig, ActualizarReglaRequest
+  ReglaEvaluacionConfig, ActualizarReglaRequest,
+  ParametrosLineaCredito
 } from '../../models/configuracion.model';
 import { NuevaReglaDialogComponent } from './nueva-regla-dialog.component';
 
@@ -61,6 +62,18 @@ export class ConfiguracionComponent implements OnInit {
   cargandoReglas = true;
   actualizandoReglaId: number | null = null;
 
+  // Parametros de linea de credito
+  parametrosLC: ParametrosLineaCredito = {
+    porcentajeCapitalTrabajo: 20,
+    porcentajePatrimonio: 30,
+    porcentajeUtilidadNeta: 100,
+    pesoRedNivel0: 100,
+    pesoRedNivel1: 50,
+    pesoRedNivel2: 25
+  };
+  cargandoLC = true;
+  guardandoLC = false;
+
   operadores = [
     { valor: 0, simbolo: '>' },
     { valor: 1, simbolo: '<' },
@@ -79,6 +92,7 @@ export class ConfiguracionComponent implements OnInit {
   ngOnInit(): void {
     this.cargarTipos();
     this.cargarReglas();
+    this.cargarParametrosLC();
   }
 
   // --- Tipos de documento ---
@@ -263,6 +277,48 @@ export class ConfiguracionComponent implements OnInit {
             this.snackBar.open('Error al crear regla', 'Cerrar', { duration: 5000 });
           }
         });
+      }
+    });
+  }
+
+  // --- Parametros de linea de credito ---
+
+  cargarParametrosLC(): void {
+    this.cargandoLC = true;
+    this.api.getParametrosLineaCredito().subscribe({
+      next: (params) => {
+        this.parametrosLC = params;
+        this.cargandoLC = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.snackBar.open('Error al cargar parametros de linea de credito', 'Cerrar', { duration: 5000 });
+        this.cargandoLC = false;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  onParametroLCBlur(campo: keyof ParametrosLineaCredito, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const nuevoValor = parseFloat(input.value);
+    if (isNaN(nuevoValor) || nuevoValor === this.parametrosLC[campo]) return;
+
+    this.parametrosLC = { ...this.parametrosLC, [campo]: nuevoValor };
+    this.guardandoLC = true;
+    this.cdr.markForCheck();
+
+    this.api.actualizarParametrosLineaCredito(this.parametrosLC).subscribe({
+      next: (params) => {
+        this.parametrosLC = params;
+        this.guardandoLC = false;
+        this.snackBar.open('Parametros de linea de credito actualizados', 'OK', { duration: 2000 });
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.guardandoLC = false;
+        this.snackBar.open('Error al actualizar parametros', 'Cerrar', { duration: 5000 });
+        this.cargarParametrosLC();
       }
     });
   }

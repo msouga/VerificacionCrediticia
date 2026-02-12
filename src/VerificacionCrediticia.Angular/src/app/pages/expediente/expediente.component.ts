@@ -13,7 +13,8 @@ import { DecimalPipe, PercentPipe, DatePipe } from '@angular/common';
 import { VerificacionApiService } from '../../services/verificacion-api.service';
 import {
   Expediente, TipoDocumento, DocumentoProcesadoResumen,
-  EstadoExpediente, EstadoDocumento, ResultadoRegla
+  EstadoExpediente, EstadoDocumento, ResultadoRegla, ResultadoValidacionCruzada,
+  ResultadoExploracionRed, NodoRed
 } from '../../models/expediente.model';
 import { EvaluarDialogComponent, EvaluarDialogResult } from './evaluar-dialog.component';
 
@@ -330,6 +331,46 @@ export class ExpedienteComponent implements OnInit, OnDestroy {
     return this.expediente.documentos.filter(d => d.tipoDocumentoId === null);
   }
 
+  descartarDocumento(doc: DocumentoProcesadoResumen): void {
+    if (!this.expediente) return;
+
+    // Contar cuantos docs comparten el mismo mensaje de error (indica duplicados del mismo tipo)
+    const docsConMismoError = this.documentosEnClasificacion.filter(
+      d => d.estado === EstadoDocumento.Error && d.errorMensaje === doc.errorMensaje
+    );
+
+    // Si es el ultimo del grupo de duplicados, preguntar si quiere usarlo como correcto
+    if (docsConMismoError.length === 1 && doc.errorMensaje?.includes('Se detectaron multiples')) {
+      const usarComoCorrecto = confirm(
+        `Este es el ultimo documento con este conflicto.\n\n` +
+        `¿Desea usarlo como el documento correcto? Se reprocesara automaticamente.\n\n` +
+        `Si lo descarta, debera subirlo de nuevo.`
+      );
+
+      if (usarComoCorrecto) {
+        this.api.aceptarDocumento(this.expediente.id, doc.id).subscribe({
+          next: () => {
+            this.recargarExpediente();
+            this.iniciarPolling();
+          },
+          error: (err) => {
+            alert(err.error?.detail || 'Error al aceptar el documento');
+          }
+        });
+        return;
+      }
+    }
+
+    this.api.descartarDocumento(this.expediente.id, doc.id).subscribe({
+      next: () => {
+        this.recargarExpediente();
+      },
+      error: (err) => {
+        alert(err.error?.detail || 'Error al descartar el documento');
+      }
+    });
+  }
+
   // Helpers de estado
   getEstadoLabel(estado: EstadoExpediente): string {
     const labels: Record<number, string> = {
@@ -405,6 +446,12 @@ export class ExpedienteComponent implements OnInit, OnDestroy {
     return regla.cumplida ? 'regla-aprobar' : 'regla-rechazar';
   }
 
+  getValidacionClass(validacion: ResultadoValidacionCruzada): string {
+    if (validacion.aprobada) return 'validacion-aprobada';
+    if (validacion.severidad === ResultadoRegla.Rechazar) return 'validacion-rechazar';
+    return 'validacion-revisar';
+  }
+
   get progreso(): number {
     if (!this.expediente || this.expediente.totalDocumentosObligatorios === 0) return 0;
     return (this.expediente.documentosObligatoriosCompletos / this.expediente.totalDocumentosObligatorios) * 100;
@@ -415,5 +462,28 @@ export class ExpedienteComponent implements OnInit, OnDestroy {
     const n = this.expediente.nombresSolicitante || '';
     const a = this.expediente.apellidosSolicitante || '';
     return `${n} ${a}`.trim();
+  }
+
+  // Red de relaciones
+  getNodosOrdenados(red: ResultadoExploracionRed): { id: string; nodo: NodoRed }[] {
+    return Object.entries(red.grafo)
+      .map(([id, nodo]) => ({ id, nodo }))
+      .sort((a, b) => a.nodo.nivelProfundidad - b.nodo.nivelProfundidad);
+  }
+
+  getNodoRiesgoClass(nodo: NodoRed): string {
+    const texto = nodo.nivelRiesgoTexto?.toUpperCase() || '';
+    if (texto.includes('MUY ALTO')) return 'nodo-riesgo-muy-alto';
+    if (texto.includes('ALTO')) return 'nodo-riesgo-alto';
+    if (texto.includes('MODERADO')) return 'nodo-riesgo-moderado';
+    return 'nodo-riesgo-bajo';
+  }
+
+  getNodoRiesgoChipClass(nodo: NodoRed): string {
+    const texto = nodo.nivelRiesgoTexto?.toUpperCase() || '';
+    if (texto.includes('MUY ALTO')) return 'riesgo-chip-muy-alto';
+    if (texto.includes('ALTO')) return 'riesgo-chip-alto';
+    if (texto.includes('MODERADO')) return 'riesgo-chip-moderado';
+    return 'riesgo-chip-bajo';
   }
 }

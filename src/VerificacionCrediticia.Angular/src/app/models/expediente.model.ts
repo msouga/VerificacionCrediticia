@@ -56,6 +56,14 @@ export interface DocumentoProcesadoResumen {
   errorMensaje: string | null;
 }
 
+export interface ResultadoValidacionCruzada {
+  nombre: string;
+  aprobada: boolean;
+  severidad: ResultadoRegla;
+  mensaje: string;
+  documentosInvolucrados: string[];
+}
+
 export interface ReglaAplicadaExpediente {
   nombreRegla: string;
   campoEvaluado: string;
@@ -67,12 +75,76 @@ export interface ReglaAplicadaExpediente {
   resultadoRegla: ResultadoRegla;
 }
 
+export interface DetalleCalculoLinea {
+  concepto: string;
+  valorBase: number | null;
+  porcentaje: number;
+  montoCalculado: number | null;
+}
+
+export interface RecomendacionLineaCredito {
+  montoMaximoSugerido: number;
+  moneda: string;
+  justificacion: string;
+  detalles: DetalleCalculoLinea[];
+}
+
+export enum TipoNodo {
+  Persona = 0,
+  Empresa = 1
+}
+
+export interface DeudaRegistrada {
+  entidad: string;
+  tipoDeuda: string;
+  montoOriginal: number;
+  saldoActual: number;
+  diasVencidos: number;
+  calificacion: string;
+  fechaVencimiento: string | null;
+  estaVencida: boolean;
+}
+
+export interface ConexionNodo {
+  identificador: string;
+  tipo: TipoNodo;
+  nombre: string;
+  tipoRelacion: string;
+}
+
+export interface NodoRed {
+  identificador: string;
+  tipo: TipoNodo;
+  nombre: string;
+  nivelProfundidad: number;
+  score: number | null;
+  nivelRiesgoTexto: string | null;
+  estadoCredito: number;
+  alertas: string[];
+  deudas: DeudaRegistrada[];
+  conexiones: ConexionNodo[];
+}
+
+export interface ResultadoExploracionRed {
+  dniSolicitante: string;
+  rucEmpresa: string;
+  grafo: { [key: string]: NodoRed };
+  totalNodos: number;
+  totalPersonas: number;
+  totalEmpresas: number;
+  fechaConsulta: string;
+}
+
 export interface ResultadoEvaluacionExpediente {
   scoreFinal: number;
   recomendacion: number;
   nivelRiesgo: number;
   resumen: string;
+  penalidadRed: number;
   reglasAplicadas: ReglaAplicadaExpediente[];
+  validacionesCruzadas: ResultadoValidacionCruzada[];
+  lineaCredito: RecomendacionLineaCredito | null;
+  exploracionRed: ResultadoExploracionRed | null;
   fechaEvaluacion: string;
 }
 

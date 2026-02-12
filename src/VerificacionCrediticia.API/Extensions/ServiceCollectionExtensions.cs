@@ -66,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDocumentoProcesadoRepository, DocumentoProcesadoRepository>();
         services.AddScoped<ITipoDocumentoRepository, TipoDocumentoRepository>();
         services.AddScoped<IReglaEvaluacionRepository, ReglaEvaluacionRepository>();
+        services.AddScoped<IParametroLineaCreditoRepository, ParametroLineaCreditoRepository>();
         // Configuración de Equifax
         var equifaxSettings = configuration.GetSection(EquifaxSettings.SectionName);
         services.Configure<EquifaxSettings>(equifaxSettings);
@@ -77,55 +78,64 @@ public static class ServiceCollectionExtensions
         if (aoaiSettings.GetValue<bool>("UseMock"))
         {
             services.AddScoped<IDocumentIntelligenceService, DocumentIntelligenceServiceMock>();
+            services.AddScoped<INarrativaEvaluacionService, NarrativaEvaluacionServiceMock>();
         }
         else
         {
+            // Configuracion comun de resilience para Azure OpenAI
+            void ConfigureOpenAIResilience(ResiliencePipelineBuilder<HttpResponseMessage> builder, IServiceProvider sp)
+            {
+                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+                var logger = loggerFactory.CreateLogger("AzureOpenAI.Resilience");
+
+                builder.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 5,
+                    BackoffType = DelayBackoffType.Exponential,
+                    Delay = TimeSpan.FromSeconds(2),
+                    UseJitter = true,
+                    ShouldHandle = args => ValueTask.FromResult(
+                        args.Outcome.Result?.StatusCode == HttpStatusCode.TooManyRequests
+                        || args.Outcome.Result?.StatusCode == HttpStatusCode.ServiceUnavailable
+                        || args.Outcome.Result?.StatusCode == HttpStatusCode.RequestTimeout),
+                    DelayGenerator = args =>
+                    {
+                        if (args.Outcome.Result?.Headers.RetryAfter is { } retryAfter)
+                        {
+                            TimeSpan? delay = retryAfter.Delta
+                                ?? (retryAfter.Date.HasValue
+                                    ? retryAfter.Date.Value - DateTimeOffset.UtcNow
+                                    : null);
+
+                            if (delay.HasValue && delay.Value > TimeSpan.Zero)
+                            {
+                                logger.LogInformation(
+                                    "Retry-After header indica esperar {Delay}", delay.Value);
+                                return ValueTask.FromResult<TimeSpan?>(delay.Value);
+                            }
+                        }
+
+                        return ValueTask.FromResult<TimeSpan?>(null);
+                    },
+                    OnRetry = args =>
+                    {
+                        logger.LogWarning(
+                            "Retry {AttemptNumber} para Azure OpenAI. Status: {Status}. Esperando {Delay}",
+                            args.AttemptNumber,
+                            args.Outcome.Result?.StatusCode,
+                            args.RetryDelay);
+                        return ValueTask.CompletedTask;
+                    }
+                });
+            }
+
             services.AddHttpClient<IDocumentIntelligenceService, OpenAIVisionService>()
                 .AddResilienceHandler("azure-openai-vision", (builder, context) =>
-                {
-                    var loggerFactory = context.ServiceProvider.GetRequiredService<ILoggerFactory>();
-                    var logger = loggerFactory.CreateLogger("AzureOpenAI.Resilience");
+                    ConfigureOpenAIResilience(builder, context.ServiceProvider));
 
-                    builder.AddRetry(new HttpRetryStrategyOptions
-                    {
-                        MaxRetryAttempts = 5,
-                        BackoffType = DelayBackoffType.Exponential,
-                        Delay = TimeSpan.FromSeconds(2),
-                        UseJitter = true,
-                        ShouldHandle = args => ValueTask.FromResult(
-                            args.Outcome.Result?.StatusCode == HttpStatusCode.TooManyRequests
-                            || args.Outcome.Result?.StatusCode == HttpStatusCode.ServiceUnavailable
-                            || args.Outcome.Result?.StatusCode == HttpStatusCode.RequestTimeout),
-                        DelayGenerator = args =>
-                        {
-                            if (args.Outcome.Result?.Headers.RetryAfter is { } retryAfter)
-                            {
-                                TimeSpan? delay = retryAfter.Delta
-                                    ?? (retryAfter.Date.HasValue
-                                        ? retryAfter.Date.Value - DateTimeOffset.UtcNow
-                                        : null);
-
-                                if (delay.HasValue && delay.Value > TimeSpan.Zero)
-                                {
-                                    logger.LogInformation(
-                                        "Retry-After header indica esperar {Delay}", delay.Value);
-                                    return ValueTask.FromResult<TimeSpan?>(delay.Value);
-                                }
-                            }
-
-                            return ValueTask.FromResult<TimeSpan?>(null);
-                        },
-                        OnRetry = args =>
-                        {
-                            logger.LogWarning(
-                                "Retry {AttemptNumber} para Azure OpenAI Vision. Status: {Status}. Esperando {Delay}",
-                                args.AttemptNumber,
-                                args.Outcome.Result?.StatusCode,
-                                args.RetryDelay);
-                            return ValueTask.CompletedTask;
-                        }
-                    });
-                });
+            services.AddHttpClient<INarrativaEvaluacionService, NarrativaEvaluacionService>()
+                .AddResilienceHandler("azure-openai-narrativa", (builder, context) =>
+                    ConfigureOpenAIResilience(builder, context.ServiceProvider));
         }
 
         // Configuración de RENIEC
@@ -166,6 +176,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IVerificacionService, VerificacionService>();
         services.AddScoped<IMotorReglasService, MotorReglasService>();
         services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
+        services.AddScoped<IValidacionCruzadaService, ValidacionCruzadaService>();
         services.AddScoped<IExpedienteService, ExpedienteService>();
 
         return services;

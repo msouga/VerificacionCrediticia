@@ -60,6 +60,8 @@ tests/
 - `POST /api/configuracion/reglas` - Crear regla
 - `PUT /api/configuracion/reglas/{id}` - Actualizar regla (valor, peso, operador, resultado, activa, orden)
 - `DELETE /api/configuracion/reglas/{id}` - Eliminar regla
+- `GET /api/configuracion/linea-credito` - Obtener parametros de linea de credito
+- `PUT /api/configuracion/linea-credito` - Actualizar parametros de linea de credito
 
 ## Endpoints de expedientes
 - `POST /api/expedientes` - Crear expediente
@@ -70,6 +72,8 @@ tests/
 - `POST /api/expedientes/{id}/documentos/{codigoTipo}` - Subir documento a blob (JSON, sin procesamiento)
 - `PUT /api/expedientes/{id}/documentos/{docId}` - Reemplazar documento (JSON)
 - `POST /api/expedientes/{id}/evaluar` - Evaluar: procesa todos con Azure OpenAI Vision + reglas (SSE)
+- `DELETE /api/expedientes/{id}/documentos/{docId}` - Descartar documento en error (elimina blob + registro)
+- `POST /api/expedientes/{id}/documentos/{docId}/aceptar` - Aceptar documento en error como correcto y re-encolar
 - `GET /api/expedientes/tipos-documento` - Lista tipos de documento
 
 ## Flujo de expedientes
@@ -81,6 +85,7 @@ tests/
    - `detalle` contiene mensajes de progreso de GPT-4.1 Vision (ej: "Convirtiendo paginas...", "Analizando con IA...")
    - Soporta cancelacion via CancellationToken/AbortController
    - Retry automatico (1 intento) si falla un documento
+5. **Duplicados en carga masiva**: Si multiples archivos se clasifican como el mismo tipo, NINGUNO ocupa el slot. Todos quedan en Error con mensaje "Se detectaron multiples documentos de tipo 'X'...". El usuario descarta los incorrectos con boton X. Al quedar solo 1, se le pregunta si quiere usarlo como correcto (re-encola para procesamiento).
 
 ## Resiliencia HTTP (Azure OpenAI Vision)
 - Polly retry: 429 (TooManyRequests), 503 (ServiceUnavailable), 408 (RequestTimeout)

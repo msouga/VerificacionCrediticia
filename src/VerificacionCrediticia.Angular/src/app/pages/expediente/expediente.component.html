@@ -127,10 +127,12 @@
         <mat-card-content>
           <h3>Clasificando documentos...</h3>
           @for (doc of documentosEnClasificacion; track doc.id) {
-            <div class="doc-resumen doc-clasificando">
+            <div class="doc-resumen doc-clasificando" [class.doc-error]="doc.estado === 3">
               <div class="doc-info">
                 @if (doc.estado === 1) {
                   <mat-spinner diameter="20"></mat-spinner>
+                } @else if (doc.estado === 3) {
+                  <mat-icon class="estado-error">error</mat-icon>
                 } @else {
                   <mat-icon class="estado-subido">cloud_done</mat-icon>
                 }
@@ -140,13 +142,23 @@
                     @if (doc.estado === 1) {
                       Clasificando con IA...
                     } @else if (doc.estado === 3) {
-                      Error: {{ doc.errorMensaje || 'Error desconocido' }}
+                      {{ doc.errorMensaje || 'Error desconocido' }}
                     } @else {
                       En cola de clasificacion...
                     }
                   </span>
                 </div>
               </div>
+              @if (doc.estado === 3) {
+                <div class="doc-actions-clasificacion">
+                  <button mat-icon-button
+                          color="warn"
+                          matTooltip="Descartar documento"
+                          (click)="descartarDocumento(doc)">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </div>
+              }
             </div>
           }
         </mat-card-content>
@@ -307,37 +319,33 @@
       }
     </mat-accordion>
 
-    <!-- Boton Evaluar -->
-    @if (expediente.estado !== 3) {
-      <div class="evaluar-section">
-        @if (error) {
-          <div class="evaluar-error">
-            <mat-icon>error</mat-icon>
-            <span>{{ error }}</span>
-          </div>
-        }
-        <button mat-raised-button color="primary"
-                class="evaluar-btn"
-                [disabled]="!puedeEvaluar"
-                (click)="evaluar()"
-                [matTooltip]="!puedeEvaluar ? (hayDocumentosProcesandose() ? 'Espere a que terminen de procesarse los documentos' : 'Complete todos los documentos obligatorios para evaluar') : ''">
-          <ng-container>
-            <mat-icon>gavel</mat-icon>
-            Evaluar Expediente
-          </ng-container>
-        </button>
-        @if (hayDocumentosProcesandose()) {
-          <p class="evaluar-hint">
-            Procesando documentos con IA, espere un momento...
-          </p>
-        } @else if (!expediente.puedeEvaluar) {
-          <p class="evaluar-hint">
-            Faltan {{ expediente.totalDocumentosObligatorios - expediente.documentosObligatoriosCompletos }}
-            documento(s) obligatorio(s) por subir
-          </p>
-        }
-      </div>
-    }
+    <!-- Boton Evaluar / Reprocesar -->
+    <div class="evaluar-section">
+      @if (error) {
+        <div class="evaluar-error">
+          <mat-icon>error</mat-icon>
+          <span>{{ error }}</span>
+        </div>
+      }
+      <button mat-raised-button color="primary"
+              class="evaluar-btn"
+              [disabled]="!puedeEvaluar"
+              (click)="evaluar()"
+              [matTooltip]="!puedeEvaluar ? (hayDocumentosProcesandose() ? 'Espere a que terminen de procesarse los documentos' : 'Complete todos los documentos obligatorios para evaluar') : ''">
+        <mat-icon>{{ expediente.estado === 3 ? 'refresh' : 'gavel' }}</mat-icon>
+        {{ expediente.estado === 3 ? 'Reprocesar Expediente' : 'Evaluar Expediente' }}
+      </button>
+      @if (hayDocumentosProcesandose()) {
+        <p class="evaluar-hint">
+          Procesando documentos con IA, espere un momento...
+        </p>
+      } @else if (!expediente.puedeEvaluar) {
+        <p class="evaluar-hint">
+          Faltan {{ expediente.totalDocumentosObligatorios - expediente.documentosObligatoriosCompletos }}
+          documento(s) obligatorio(s) por subir
+        </p>
+      }
+    </div>
 
     <!-- Resultado de Evaluacion -->
     @if (expediente.resultadoEvaluacion) {
@@ -354,6 +362,11 @@
             <div class="resultado-score">
               <span class="score-valor">{{ expediente.resultadoEvaluacion.scoreFinal | number:'1.1-1' }}</span>
               <span class="score-label">Score Final</span>
+              @if (expediente.resultadoEvaluacion.penalidadRed > 0) {
+                <span class="penalidad-red">
+                  -{{ expediente.resultadoEvaluacion.penalidadRed | number:'1.1-1' }} por red de relaciones
+                </span>
+              }
             </div>
             <div class="resultado-recomendacion" [class]="getRecomendacionClass(expediente.resultadoEvaluacion.recomendacion)">
               <span class="rec-text">{{ getRecomendacionLabel(expediente.resultadoEvaluacion.recomendacion) }}</span>
@@ -362,7 +375,118 @@
           </div>
 
           @if (expediente.resultadoEvaluacion.resumen) {
-            <p class="resultado-resumen">{{ expediente.resultadoEvaluacion.resumen }}</p>
+            <div class="narrativa-section">
+              <div class="narrativa-header">
+                <mat-icon>auto_stories</mat-icon>
+                <h3>Informe Narrativo</h3>
+              </div>
+              <div class="narrativa-contenido">
+                @for (parrafo of expediente.resultadoEvaluacion.resumen.split('\n'); track $index) {
+                  @if (parrafo.trim()) {
+                    <p>{{ parrafo }}</p>
+                  }
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Linea de credito recomendada -->
+          @if (expediente.resultadoEvaluacion.lineaCredito) {
+            <div class="linea-credito-card">
+              <div class="linea-credito-header">
+                <mat-icon>account_balance</mat-icon>
+                <h3>Linea de Credito Recomendada</h3>
+              </div>
+              <div class="linea-credito-monto">
+                <span class="monto-moneda">{{ expediente.resultadoEvaluacion.lineaCredito.moneda }}</span>
+                <span class="monto-valor">{{ expediente.resultadoEvaluacion.lineaCredito.montoMaximoSugerido | number:'1.2-2' }}</span>
+              </div>
+              <p class="linea-credito-justificacion">{{ expediente.resultadoEvaluacion.lineaCredito.justificacion }}</p>
+              <div class="linea-credito-detalles">
+                @for (detalle of expediente.resultadoEvaluacion.lineaCredito.detalles; track $index) {
+                  <div class="detalle-linea">
+                    <span class="detalle-concepto">{{ detalle.concepto }}</span>
+                    <span class="detalle-calculo">
+                      {{ detalle.porcentaje }}% de {{ detalle.valorBase | number:'1.2-2' }}
+                      = <strong>{{ detalle.montoCalculado | number:'1.2-2' }}</strong>
+                    </span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Red de relaciones -->
+          @if (expediente.resultadoEvaluacion.exploracionRed) {
+            <div class="red-relaciones-section">
+              <div class="red-header">
+                <mat-icon>hub</mat-icon>
+                <h3>Red de Relaciones Crediticias</h3>
+                <span class="red-stats">
+                  {{ expediente.resultadoEvaluacion.exploracionRed.totalNodos }} nodos
+                  ({{ expediente.resultadoEvaluacion.exploracionRed.totalPersonas }} personas,
+                  {{ expediente.resultadoEvaluacion.exploracionRed.totalEmpresas }} empresas)
+                </span>
+              </div>
+              <div class="red-nodos-grid">
+                @for (nodoEntry of getNodosOrdenados(expediente.resultadoEvaluacion.exploracionRed); track nodoEntry.id) {
+                  <div class="nodo-item" [class]="getNodoRiesgoClass(nodoEntry.nodo)">
+                    <div class="nodo-header">
+                      <mat-icon>{{ nodoEntry.nodo.tipo === 0 ? 'person' : 'business' }}</mat-icon>
+                      <div class="nodo-info">
+                        <span class="nodo-nombre">{{ nodoEntry.nodo.nombre }}</span>
+                        <span class="nodo-id">{{ nodoEntry.nodo.tipo === 0 ? 'DNI' : 'RUC' }}: {{ nodoEntry.id }}</span>
+                      </div>
+                      <div class="nodo-badges">
+                        <span class="nodo-nivel">Nivel {{ nodoEntry.nodo.nivelProfundidad }}</span>
+                        @if (nodoEntry.nodo.nivelRiesgoTexto) {
+                          <span class="nodo-riesgo" [class]="getNodoRiesgoChipClass(nodoEntry.nodo)">
+                            {{ nodoEntry.nodo.nivelRiesgoTexto }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                    @if (nodoEntry.nodo.alertas.length > 0) {
+                      <div class="nodo-alertas">
+                        @for (alerta of nodoEntry.nodo.alertas; track $index) {
+                          <span class="alerta-chip">{{ alerta }}</span>
+                        }
+                      </div>
+                    }
+                    @if (nodoEntry.nodo.conexiones.length > 0) {
+                      <div class="nodo-conexiones">
+                        @for (con of nodoEntry.nodo.conexiones; track $index) {
+                          <span class="conexion-chip">
+                            {{ con.tipoRelacion }}: {{ con.nombre }}
+                          </span>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Validaciones cruzadas -->
+          @if (expediente.resultadoEvaluacion.validacionesCruzadas.length) {
+            <h3>Validaciones de Documentos</h3>
+            <div class="validaciones-grid">
+              @for (validacion of expediente.resultadoEvaluacion.validacionesCruzadas; track $index) {
+                <div class="validacion-item" [class]="getValidacionClass(validacion)">
+                  <div class="validacion-header">
+                    <mat-icon>{{ validacion.aprobada ? 'check_circle' : (validacion.severidad === 1 ? 'cancel' : 'warning') }}</mat-icon>
+                    <span class="validacion-nombre">{{ validacion.nombre }}</span>
+                  </div>
+                  <p class="validacion-mensaje">{{ validacion.mensaje }}</p>
+                  <div class="validacion-docs">
+                    @for (doc of validacion.documentosInvolucrados; track $index) {
+                      <span class="validacion-doc-chip">{{ doc }}</span>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
           }
 
           <!-- Reglas aplicadas -->

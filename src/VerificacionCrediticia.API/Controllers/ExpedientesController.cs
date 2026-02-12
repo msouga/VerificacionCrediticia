@@ -389,6 +389,74 @@ public class ExpedientesController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Descartar un documento en error o sin tipo asignado (elimina blob + registro)
+    /// </summary>
+    [HttpDelete("{id:int}/documentos/{documentoId:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DescartarDocumento(int id, int documentoId)
+    {
+        try
+        {
+            await _expedienteService.DescartarDocumentoAsync(id, documentoId);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "No encontrado",
+                Detail = ex.Message,
+                Status = 404
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Operacion no permitida",
+                Detail = ex.Message,
+                Status = 400
+            });
+        }
+    }
+
+    /// <summary>
+    /// Aceptar un documento en error como correcto y re-encolarlo para procesamiento
+    /// </summary>
+    [HttpPost("{id:int}/documentos/{documentoId:int}/aceptar")]
+    [ProducesResponseType(typeof(DocumentoProcesadoResumenDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<DocumentoProcesadoResumenDto>> AceptarDocumento(int id, int documentoId)
+    {
+        try
+        {
+            var resultado = await _expedienteService.AceptarDocumentoAsync(id, documentoId);
+            return Ok(resultado);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "No encontrado",
+                Detail = ex.Message,
+                Status = 404
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Operacion no permitida",
+                Detail = ex.Message,
+                Status = 400
+            });
+        }
+    }
+
     [HttpGet("tipos-documento")]
     [ProducesResponseType(typeof(List<TipoDocumentoDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<TipoDocumentoDto>>> GetTiposDocumento()

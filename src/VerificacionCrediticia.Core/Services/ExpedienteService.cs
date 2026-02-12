@@ -14,8 +14,12 @@ public class ExpedienteService : IExpedienteService
     private readonly ITipoDocumentoRepository _tipoDocumentoRepo;
     private readonly IDocumentProcessingService _processingService;
     private readonly IMotorReglasService _motorReglas;
+    private readonly IValidacionCruzadaService _validacionCruzada;
+    private readonly INarrativaEvaluacionService _narrativaService;
+    private readonly IExploradorRedService _exploradorRed;
     private readonly IBlobStorageService _blobStorage;
     private readonly IDocumentProcessingQueue _processingQueue;
+    private readonly IParametroLineaCreditoRepository _parametroLineaCreditoRepo;
     private readonly ILogger<ExpedienteService> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -30,8 +34,12 @@ public class ExpedienteService : IExpedienteService
         ITipoDocumentoRepository tipoDocumentoRepo,
         IDocumentProcessingService processingService,
         IMotorReglasService motorReglas,
+        IValidacionCruzadaService validacionCruzada,
+        INarrativaEvaluacionService narrativaService,
+        IExploradorRedService exploradorRed,
         IBlobStorageService blobStorage,
         IDocumentProcessingQueue processingQueue,
+        IParametroLineaCreditoRepository parametroLineaCreditoRepo,
         ILogger<ExpedienteService> logger)
     {
         _expedienteRepo = expedienteRepo;
@@ -39,8 +47,12 @@ public class ExpedienteService : IExpedienteService
         _tipoDocumentoRepo = tipoDocumentoRepo;
         _processingService = processingService;
         _motorReglas = motorReglas;
+        _validacionCruzada = validacionCruzada;
+        _narrativaService = narrativaService;
+        _exploradorRed = exploradorRed;
         _blobStorage = blobStorage;
         _processingQueue = processingQueue;
+        _parametroLineaCreditoRepo = parametroLineaCreditoRepo;
         _logger = logger;
     }
 
@@ -61,34 +73,14 @@ public class ExpedienteService : IExpedienteService
 
     public async Task<ListaExpedientesResponse> ListarExpedientesAsync(int pagina, int tamanoPagina)
     {
-        var (items, total) = await _expedienteRepo.GetPaginadoAsync(pagina, tamanoPagina);
         var tiposObligatorios = await _tipoDocumentoRepo.GetObligatoriosAsync();
+        var tipoObligatorioIds = tiposObligatorios.Select(t => t.Id).ToList();
 
-        var resumen = items.Select(exp =>
-        {
-            var docsProcesados = exp.Documentos
-                .Where(d => d.Estado == EstadoDocumento.Procesado && d.TipoDocumentoId.HasValue)
-                .Select(d => d.TipoDocumentoId!.Value)
-                .ToHashSet();
-
-            return new ExpedienteResumenDto
-            {
-                Id = exp.Id,
-                Descripcion = exp.Descripcion,
-                DniSolicitante = exp.DniSolicitante,
-                NombresSolicitante = exp.NombresSolicitante,
-                RucEmpresa = exp.RucEmpresa,
-                RazonSocialEmpresa = exp.RazonSocialEmpresa,
-                Estado = exp.Estado,
-                FechaCreacion = exp.FechaCreacion,
-                DocumentosObligatoriosCompletos = tiposObligatorios.Count(t => docsProcesados.Contains(t.Id)),
-                TotalDocumentosObligatorios = tiposObligatorios.Count
-            };
-        }).ToList();
+        var (items, total) = await _expedienteRepo.GetPaginadoResumenAsync(pagina, tamanoPagina, tipoObligatorioIds);
 
         return new ListaExpedientesResponse
         {
-            Items = resumen,
+            Items = items,
             Total = total,
             Pagina = pagina,
             TamanoPagina = tamanoPagina
@@ -347,6 +339,98 @@ public class ExpedienteService : IExpedienteService
         }
 
         var totalDocs = expediente.Documentos.Count;
+
+        // Validacion cruzada de documentos
+        progreso?.Report(new ProgresoEvaluacionDto
+        {
+            Archivo = "",
+            Paso = "Validando consistencia entre documentos...",
+            DocumentoActual = totalDocs,
+            TotalDocumentos = totalDocs
+        });
+
+        var documentosProcesados = expediente.Documentos
+            .Where(d => d.Estado == EstadoDocumento.Procesado)
+            .ToList();
+        var validacionesCruzadas = _validacionCruzada.ValidarDocumentos(expediente, documentosProcesados);
+
+        // Si hay validaciones criticas fallidas (Rechazar), no evaluar reglas financieras
+        var rechazosValidacion = validacionesCruzadas
+            .Where(v => !v.Aprobada && v.Severidad == ResultadoRegla.Rechazar)
+            .ToList();
+
+        if (rechazosValidacion.Count > 0)
+        {
+            _logger.LogWarning("Expediente {Id}: validacion cruzada rechaza. {Rechazos}",
+                expedienteId, string.Join("; ", rechazosValidacion.Select(r => r.Mensaje)));
+
+            var resultadoRechazado = new ResultadoMotorReglas
+            {
+                Recomendacion = Recomendacion.Rechazar,
+                PuntajeFinal = 0,
+                NivelRiesgo = NivelRiesgo.MuyAlto,
+                ValidacionesCruzadas = validacionesCruzadas,
+                Resumen = $"Rechazado por validacion cruzada: {string.Join("; ", rechazosValidacion.Select(r => r.Nombre))}",
+                FechaEvaluacion = DateTime.UtcNow
+            };
+
+            var persistidoRechazado = new ResultadoEvaluacionPersistido
+            {
+                ExpedienteId = expedienteId,
+                ScoreFinal = 0,
+                Recomendacion = Recomendacion.Rechazar,
+                NivelRiesgo = NivelRiesgo.MuyAlto,
+                ResultadoCompletoJson = JsonSerializer.Serialize(resultadoRechazado, JsonOptions),
+                FechaEvaluacion = DateTime.UtcNow
+            };
+
+            if (expediente.ResultadoEvaluacion != null)
+            {
+                expediente.ResultadoEvaluacion.ScoreFinal = persistidoRechazado.ScoreFinal;
+                expediente.ResultadoEvaluacion.Recomendacion = persistidoRechazado.Recomendacion;
+                expediente.ResultadoEvaluacion.NivelRiesgo = persistidoRechazado.NivelRiesgo;
+                expediente.ResultadoEvaluacion.ResultadoCompletoJson = persistidoRechazado.ResultadoCompletoJson;
+                expediente.ResultadoEvaluacion.FechaEvaluacion = persistidoRechazado.FechaEvaluacion;
+            }
+            else
+            {
+                expediente.ResultadoEvaluacion = persistidoRechazado;
+            }
+
+            expediente.Estado = EstadoExpediente.Evaluado;
+            expediente.FechaEvaluacion = DateTime.UtcNow;
+            await _expedienteRepo.UpdateAsync(expediente);
+
+            return await BuildExpedienteDtoAsync(expedienteId);
+        }
+
+        // Consultar red de relaciones (Equifax)
+        ResultadoExploracionDto? exploracionRed = null;
+        if (!string.IsNullOrEmpty(expediente.DniSolicitante) && !string.IsNullOrEmpty(expediente.RucEmpresa))
+        {
+            progreso?.Report(new ProgresoEvaluacionDto
+            {
+                Archivo = "",
+                Paso = "Consultando red de relaciones crediticias...",
+                DocumentoActual = totalDocs,
+                TotalDocumentos = totalDocs
+            });
+
+            try
+            {
+                exploracionRed = await _exploradorRed.ExplorarRedAsync(
+                    expediente.DniSolicitante, expediente.RucEmpresa, 2, cancellationToken);
+
+                _logger.LogInformation(
+                    "Red explorada para expediente {Id}: {Nodos} nodos ({Personas} personas, {Empresas} empresas)",
+                    expedienteId, exploracionRed.TotalNodos, exploracionRed.TotalPersonas, exploracionRed.TotalEmpresas);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error consultando red de relaciones para expediente {Id}", expedienteId);
+            }
+        }
+
         progreso?.Report(new ProgresoEvaluacionDto
         {
             Archivo = "",
@@ -358,6 +442,55 @@ public class ExpedienteService : IExpedienteService
         // Extraer datos y ejecutar motor de reglas
         var datosEvaluacion = ExtraerDatosParaEvaluacion(expediente);
         var resultadoReglas = await _motorReglas.EvaluarAsync(datosEvaluacion);
+
+        // Agregar validaciones cruzadas y exploracion de red al resultado
+        resultadoReglas.ValidacionesCruzadas = validacionesCruzadas;
+        resultadoReglas.ExploracionRed = exploracionRed;
+
+        // Cargar parametros (se usan para linea de credito y penalidad red)
+        var parametrosLC = await _parametroLineaCreditoRepo.GetAsync(cancellationToken);
+
+        // Aplicar penalidad por red de relaciones
+        if (exploracionRed != null)
+        {
+            var penalidadRed = CalcularPenalidadRed(exploracionRed, parametrosLC);
+            if (penalidadRed > 0)
+            {
+                resultadoReglas.PenalidadRed = penalidadRed;
+                resultadoReglas.PuntajeFinal = Math.Max(0, resultadoReglas.PuntajeFinal - penalidadRed);
+                RecalcularNivelYRecomendacion(resultadoReglas);
+
+                _logger.LogInformation(
+                    "Expediente {Id}: penalidad red = {Penalidad}, score ajustado = {Score}",
+                    expedienteId, penalidadRed, resultadoReglas.PuntajeFinal);
+            }
+        }
+
+        // Calcular recomendacion de linea de credito
+        if (resultadoReglas.Recomendacion != Recomendacion.Rechazar)
+        {
+            resultadoReglas.LineaCredito = CalcularLineaCredito(expediente, parametrosLC);
+        }
+
+        // Generar narrativa con IA
+        progreso?.Report(new ProgresoEvaluacionDto
+        {
+            Archivo = "",
+            Paso = "Generando informe narrativo...",
+            DocumentoActual = totalDocs,
+            TotalDocumentos = totalDocs
+        });
+
+        try
+        {
+            resultadoReglas.Resumen = await _narrativaService.GenerarNarrativaAsync(
+                expediente, resultadoReglas, datosEvaluacion, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error generando narrativa, usando resumen basico");
+            resultadoReglas.Resumen = $"Score: {resultadoReglas.PuntajeFinal:F1}. Recomendacion: {resultadoReglas.Recomendacion}.";
+        }
 
         // Persistir resultado
         var resultadoPersistido = new ResultadoEvaluacionPersistido
@@ -471,6 +604,70 @@ public class ExpedienteService : IExpedienteService
         }
 
         return resultados;
+    }
+
+    public async Task DescartarDocumentoAsync(int expedienteId, int documentoId)
+    {
+        var doc = await _documentoRepo.GetByIdAsync(documentoId)
+            ?? throw new KeyNotFoundException($"Documento {documentoId} no encontrado");
+
+        if (doc.ExpedienteId != expedienteId)
+            throw new InvalidOperationException("El documento no pertenece al expediente indicado");
+
+        // Solo permitir descartar documentos en Error o sin tipo asignado
+        if (doc.Estado != EstadoDocumento.Error && doc.TipoDocumentoId != null)
+            throw new InvalidOperationException("Solo se pueden descartar documentos en error o sin tipo asignado");
+
+        // Eliminar blob
+        if (!string.IsNullOrEmpty(doc.BlobUri))
+        {
+            try { await _blobStorage.DeleteAsync(doc.BlobUri); }
+            catch (Exception ex) { _logger.LogWarning(ex, "No se pudo eliminar blob {Uri}", doc.BlobUri); }
+        }
+
+        await _documentoRepo.DeleteAsync(documentoId);
+        _logger.LogInformation("Documento {DocId} descartado del expediente {ExpId}", documentoId, expedienteId);
+    }
+
+    public async Task<DocumentoProcesadoResumenDto> AceptarDocumentoAsync(int expedienteId, int documentoId)
+    {
+        var doc = await _documentoRepo.GetByIdAsync(documentoId)
+            ?? throw new KeyNotFoundException($"Documento {documentoId} no encontrado");
+
+        if (doc.ExpedienteId != expedienteId)
+            throw new InvalidOperationException("El documento no pertenece al expediente indicado");
+
+        if (doc.Estado != EstadoDocumento.Error)
+            throw new InvalidOperationException("Solo se pueden aceptar documentos en estado Error");
+
+        if (string.IsNullOrEmpty(doc.BlobUri))
+            throw new InvalidOperationException("El documento no tiene archivo asociado en blob storage");
+
+        // Re-poner estado a Subido y limpiar error
+        doc.Estado = EstadoDocumento.Subido;
+        doc.ErrorMensaje = null;
+        doc.TipoDocumentoId = null;
+        doc.DatosExtraidosJson = null;
+        await _documentoRepo.UpdateAsync(doc);
+
+        // Re-encolar para procesamiento
+        await _processingQueue.EnqueueAsync(new DocumentoProcesarMessage(
+            expedienteId, doc.Id, "AUTO", doc.BlobUri, doc.NombreArchivo));
+
+        _logger.LogInformation("Documento {DocId} aceptado y re-encolado para expediente {ExpId}", documentoId, expedienteId);
+
+        return new DocumentoProcesadoResumenDto
+        {
+            Id = doc.Id,
+            TipoDocumentoId = null,
+            CodigoTipoDocumento = "",
+            NombreTipoDocumento = "Clasificando...",
+            NombreArchivo = doc.NombreArchivo,
+            FechaProcesado = doc.FechaProcesado,
+            Estado = doc.Estado,
+            ConfianzaPromedio = null,
+            ErrorMensaje = null
+        };
     }
 
     // Metodos privados
@@ -609,6 +806,103 @@ public class ExpedienteService : IExpedienteService
         return datos;
     }
 
+    private RecomendacionLineaCredito? CalcularLineaCredito(Expediente expediente, ParametroLineaCredito parametros)
+    {
+        BalanceGeneralDto? balance = null;
+        EstadoResultadosDto? estadoResultados = null;
+
+        foreach (var doc in expediente.Documentos.Where(d => d.Estado == EstadoDocumento.Procesado))
+        {
+            if (string.IsNullOrEmpty(doc.DatosExtraidosJson)) continue;
+            var codigo = doc.TipoDocumento?.Codigo ?? "";
+            try
+            {
+                if (codigo == "BALANCE_GENERAL")
+                    balance = JsonSerializer.Deserialize<BalanceGeneralDto>(doc.DatosExtraidosJson, JsonOptions);
+                else if (codigo == "ESTADO_RESULTADOS")
+                    estadoResultados = JsonSerializer.Deserialize<EstadoResultadosDto>(doc.DatosExtraidosJson, JsonOptions);
+            }
+            catch (JsonException) { }
+        }
+
+        if (balance == null) return null;
+
+        var detalles = new List<DetalleCalculoLinea>();
+        decimal? montoCapitalTrabajo = null;
+        decimal? montoPatrimonio = null;
+        decimal? montoUtilidadAnual = null;
+
+        // 1. % del Capital de Trabajo
+        if (balance.CapitalTrabajo.HasValue && balance.CapitalTrabajo.Value > 0 && parametros.PorcentajeCapitalTrabajo > 0)
+        {
+            montoCapitalTrabajo = Math.Round(balance.CapitalTrabajo.Value * (parametros.PorcentajeCapitalTrabajo / 100m), 2);
+            detalles.Add(new DetalleCalculoLinea
+            {
+                Concepto = "Capital de Trabajo",
+                ValorBase = balance.CapitalTrabajo.Value,
+                Porcentaje = parametros.PorcentajeCapitalTrabajo,
+                MontoCalculado = montoCapitalTrabajo
+            });
+        }
+
+        // 2. % del Patrimonio Neto
+        if (balance.TotalPatrimonio.HasValue && balance.TotalPatrimonio.Value > 0 && parametros.PorcentajePatrimonio > 0)
+        {
+            montoPatrimonio = Math.Round(balance.TotalPatrimonio.Value * (parametros.PorcentajePatrimonio / 100m), 2);
+            detalles.Add(new DetalleCalculoLinea
+            {
+                Concepto = "Patrimonio Neto",
+                ValorBase = balance.TotalPatrimonio.Value,
+                Porcentaje = parametros.PorcentajePatrimonio,
+                MontoCalculado = montoPatrimonio
+            });
+        }
+
+        // 3. % de Utilidad Neta Anual (capacidad de pago)
+        if (estadoResultados?.UtilidadNeta != null && estadoResultados.UtilidadNeta.Value > 0 && parametros.PorcentajeUtilidadNeta > 0)
+        {
+            montoUtilidadAnual = Math.Round(estadoResultados.UtilidadNeta.Value * (parametros.PorcentajeUtilidadNeta / 100m), 2);
+            detalles.Add(new DetalleCalculoLinea
+            {
+                Concepto = "Utilidad Neta Anual (capacidad de pago)",
+                ValorBase = estadoResultados.UtilidadNeta.Value,
+                Porcentaje = parametros.PorcentajeUtilidadNeta,
+                MontoCalculado = montoUtilidadAnual
+            });
+        }
+
+        if (detalles.Count == 0) return null;
+
+        // Tomar el minimo de los montos disponibles (criterio conservador)
+        var montos = new[] { montoCapitalTrabajo, montoPatrimonio, montoUtilidadAnual }
+            .Where(m => m.HasValue)
+            .Select(m => m!.Value)
+            .ToList();
+
+        var montoMaximo = montos.Min();
+
+        // Determinar moneda del balance
+        var moneda = balance.Moneda?.Trim().ToUpper() switch
+        {
+            "DOLARES" or "USD" or "US$" or "DÓLARES" => "USD",
+            _ => "PEN"
+        };
+
+        // Justificacion
+        var conceptoLimitante = detalles.First(d => d.MontoCalculado == montoMaximo).Concepto;
+        var justificacion = $"Linea maxima sugerida basada en el menor de: " +
+            string.Join(", ", detalles.Select(d => $"{d.Porcentaje}% de {d.Concepto}")) +
+            $". El factor limitante es {conceptoLimitante}.";
+
+        return new RecomendacionLineaCredito
+        {
+            MontoMaximoSugerido = montoMaximo,
+            Moneda = moneda,
+            Justificacion = justificacion,
+            Detalles = detalles
+        };
+    }
+
     private async Task<ExpedienteDto> BuildExpedienteDtoAsync(int expedienteId)
     {
         var expediente = await _expedienteRepo.GetByIdWithDocumentosAsync(expedienteId);
@@ -707,11 +1001,63 @@ public class ExpedienteService : IExpedienteService
                         Cumplida = r.Cumplida,
                         Mensaje = r.Mensaje,
                         ResultadoRegla = r.ResultadoRegla
-                    }).ToList() ?? new()
+                    }).ToList() ?? new(),
+                PenalidadRed = resultadoCompleto?.PenalidadRed ?? 0,
+                ValidacionesCruzadas = resultadoCompleto?.ValidacionesCruzadas ?? new(),
+                LineaCredito = resultadoCompleto?.LineaCredito,
+                ExploracionRed = resultadoCompleto?.ExploracionRed
             };
         }
 
         return dto;
+    }
+
+    private static decimal CalcularPenalidadRed(ResultadoExploracionDto red, ParametroLineaCredito parametros)
+    {
+        var penalidad = 0m;
+        foreach (var (id, nodo) in red.Grafo)
+        {
+            // Excluir nodos raiz (solicitante y empresa)
+            if (id == red.DniSolicitante || id == red.RucEmpresa)
+                continue;
+
+            var penalidadBase = nodo.NivelRiesgoTexto?.ToUpper() switch
+            {
+                var t when t?.Contains("MUY ALTO") == true => 25m,
+                var t when t?.Contains("ALTO") == true => 15m,
+                var t when t?.Contains("MODERADO") == true => 5m,
+                _ => 0m
+            };
+
+            if (penalidadBase == 0) continue;
+
+            var pesoNivel = nodo.NivelProfundidad switch
+            {
+                0 => parametros.PesoRedNivel0,
+                1 => parametros.PesoRedNivel1,
+                _ => parametros.PesoRedNivel2
+            };
+
+            penalidad += penalidadBase * (pesoNivel / 100m);
+        }
+
+        return Math.Round(penalidad, 2);
+    }
+
+    private static void RecalcularNivelYRecomendacion(ResultadoMotorReglas resultado)
+    {
+        resultado.NivelRiesgo = resultado.PuntajeFinal switch
+        {
+            >= 80m => NivelRiesgo.Bajo,
+            >= 60m => NivelRiesgo.Moderado,
+            >= 40m => NivelRiesgo.Alto,
+            _ => NivelRiesgo.MuyAlto
+        };
+
+        if (resultado.PuntajeFinal < 40m)
+            resultado.Recomendacion = Recomendacion.Rechazar;
+        else if (resultado.PuntajeFinal < 80m && resultado.Recomendacion == Recomendacion.Aprobar)
+            resultado.Recomendacion = Recomendacion.RevisarManualmente;
     }
 
     private static string ObtenerContentType(string fileName)

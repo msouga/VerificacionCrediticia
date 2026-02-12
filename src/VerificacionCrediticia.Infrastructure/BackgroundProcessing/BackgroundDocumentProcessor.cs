@@ -161,7 +161,7 @@ public class BackgroundDocumentProcessor : BackgroundService
                     ?? throw new InvalidOperationException(
                         $"Tipo de documento '{codigoTipoFinal}' detectado pero no existe en la configuracion");
 
-                // Verificar conflicto: ya existe un documento procesado de ese tipo en el expediente
+                // Verificar conflicto: ya existe un documento del mismo tipo en el expediente
                 var expedienteCheck = await expedienteRepo.GetByIdWithDocumentosAsync(message.ExpedienteId);
                 if (expedienteCheck != null)
                 {
@@ -170,8 +170,21 @@ public class BackgroundDocumentProcessor : BackgroundService
                              && d.Estado != EstadoDocumento.Error);
                     if (docExistente != null)
                     {
-                        throw new InvalidOperationException(
-                            $"Ya existe un documento de tipo '{tipoDocumento.Nombre}' en el expediente");
+                        var mensajeConflicto = $"Se detectaron multiples documentos de tipo '{tipoDocumento.Nombre}'. " +
+                            "Descarte los incorrectos y conserve uno.";
+
+                        // Marcar el existente como error (re-leer con tracking)
+                        var docExistenteTracking = await documentoRepo.GetByIdAsync(docExistente.Id, ct);
+                        if (docExistenteTracking != null)
+                        {
+                            docExistenteTracking.Estado = EstadoDocumento.Error;
+                            docExistenteTracking.ErrorMensaje = mensajeConflicto;
+                            docExistenteTracking.TipoDocumentoId = null;
+                            await documentoRepo.UpdateAsync(docExistenteTracking, ct);
+                        }
+
+                        // El actual tambien va a Error (via la excepcion)
+                        throw new InvalidOperationException(mensajeConflicto);
                     }
                 }
 
